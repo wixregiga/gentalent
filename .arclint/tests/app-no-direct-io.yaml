@@ -1,0 +1,35 @@
+rule: app/no-direct-io
+files:
+  go.mod: "module gentalent\n\ngo 1.27\n\nrequire (\n\tgithub.com/beeper/desktop-api-go/v6 v6.0.0\n\tmodernc.org/sqlite v1.40.0\n)\n"
+  internal/nominations/app/command/nominate.go: 'package command
+
+
+    import "os"
+
+
+    var _ = os.Getenv
+
+    '
+  internal/nominations/port/clock.go: 'package port
+
+
+    import "net/http"
+
+
+    var _ = http.Get
+
+    '
+  internal/nominations/app/command/nominate_test.go: 'package command
+
+
+    import "os"
+
+
+    var _ = os.Getenv
+
+    '
+expect:
+- kind: violation
+  path: internal/nominations/app/command/nominate.go
+  line: 3
+  message: forbidden content matching /"(os|os/exec|io/fs|net|net/http|database/sql)"/

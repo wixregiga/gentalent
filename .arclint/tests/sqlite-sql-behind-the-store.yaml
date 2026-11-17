@@ -1,0 +1,42 @@
+rule: sqlite/sql-behind-the-store
+files:
+  go.mod: "module gentalent\n\ngo 1.27\n\nrequire (\n\tgithub.com/beeper/desktop-api-go/v6 v6.0.0\n\tmodernc.org/sqlite v1.40.0\n)\n"
+  internal/nominations/infra/sqlite/group_store.go: 'package sqlite
+
+
+    import "database/sql"
+
+
+    var _ *sql.DB
+
+    '
+  internal/shared/sqlitedb/open.go: 'package sqlitedb
+
+
+    import _ "modernc.org/sqlite"
+
+    '
+  internal/messaging/infra/beeper/client.go: 'package beeper
+
+
+    import "database/sql"
+
+
+    var _ *sql.DB
+
+    '
+  cmd/gentalent/main.go: 'package main
+
+
+    import _ "modernc.org/sqlite"
+
+    '
+expect:
+- kind: violation
+  path: internal/messaging/infra/beeper/client.go
+  line: 3
+  message: forbidden content matching /"(database/sql(/driver)?|modernc\.org/sqlite[^"]*)"/
+- kind: violation
+  path: cmd/gentalent/main.go
+  line: 3
+  message: forbidden content matching /"(database/sql(/driver)?|modernc\.org/sqlite[^"]*)"/

@@ -1,0 +1,22 @@
+rule: domain/aggregate-has-its-file
+files:
+  go.mod: 'module gentalent
+
+
+    go 1.27
+
+    '
+  domain.arclint.yaml: "version: 1\nproject: Fixture\ncontexts:\n  nominations:\n    definition: The nomination process.\n    aggregates:\n      Group:\n        definition: The Members and their shared chat space.\n        identity: GroupID\n"
+  internal/nominations/domain/groups.go: 'package domain
+
+
+    type Group struct{}
+
+
+    type GroupID string
+
+    '
+expect:
+- kind: violation
+  path: internal/nominations/domain/group.go
+  message: Zone "domain" is missing a required file matching "internal/nominations/domain/group.go"

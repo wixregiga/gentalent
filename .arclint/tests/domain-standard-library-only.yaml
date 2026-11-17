@@ -1,0 +1,20 @@
+rule: domain/standard-library-only
+files:
+  go.mod: 'module gentalent
+
+
+    go 1.27
+
+    '
+  internal/shared/clock/clock.go: 'package clock
+
+
+    const Mark = 1
+
+    '
+  internal/nominations/domain/group.go: "package domain\n\nimport (\n\t\"time\"\n\t\"gentalent/internal/shared/clock\"\n)\n\nvar _ = time.Now\nvar _ = clock.Mark\n"
+expect:
+- kind: violation
+  path: internal/nominations/domain/group.go
+  line: 5
+  message: import "gentalent/internal/shared/clock" resolves to Zone(s) ["shared"], not in the allow-list of Zone "domain"

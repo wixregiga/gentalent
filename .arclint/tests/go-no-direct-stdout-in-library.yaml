@@ -1,0 +1,27 @@
+rule: go/no-direct-stdout-in-library
+files:
+  go.mod: "module gentalent\n\ngo 1.27\n\nrequire (\n\tgithub.com/beeper/desktop-api-go/v6 v6.0.0\n\tmodernc.org/sqlite v1.40.0\n)\n"
+  internal/ai/infra/agents/codex.go: 'package agents
+
+
+    import "fmt"
+
+
+    func Say() { fmt.Println("found") }
+
+    '
+  internal/ai/infra/agents/log.go: "package agents\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\nfunc Log(w io.Writer) { fmt.Fprintln(w, \"found\") }\n"
+  cmd/gentalent/main.go: 'package main
+
+
+    import "fmt"
+
+
+    func main() { fmt.Println("ok") }
+
+    '
+expect:
+- kind: violation
+  path: internal/ai/infra/agents/codex.go
+  line: 5
+  message: forbidden content matching /\bfmt\.(Print|Printf|Println)\s*\(/

@@ -1,0 +1,37 @@
+rule: concurrency/goroutines-at-the-edge
+files:
+  go.mod: "module gentalent\n\ngo 1.27\n\nrequire (\n\tgithub.com/beeper/desktop-api-go/v6 v6.0.0\n\tmodernc.org/sqlite v1.40.0\n)\n"
+  internal/nominations/app/command/photos.go: "package command\n\nfunc Search(done chan bool) {\n\tgo func() { done <- true }()\n}\n"
+  internal/ai/infra/agents/run.go: 'package agents
+
+
+    func start(f func()) { go f() }
+
+    '
+  internal/messaging/delivery/poll/loop.go: 'package poll
+
+
+    func Run(f func()) { go f() }
+
+    '
+  cmd/gentalent/engine.go: 'package main
+
+
+    func start(f func()) { go f() }
+
+    '
+  internal/nominations/domain/vote.go: 'package domain
+
+
+    const Algorithm = "go first"
+
+    '
+expect:
+- kind: violation
+  path: internal/nominations/app/command/photos.go
+  line: 4
+  message: forbidden content matching /(?m)(^\s*|[;{]\s*)go\s+(func\b|[A-Za-z_][A-Za-z0-9_.]*\s*\()/
+- kind: violation
+  path: internal/ai/infra/agents/run.go
+  line: 3
+  message: forbidden content matching /(?m)(^\s*|[;{]\s*)go\s+(func\b|[A-Za-z_][A-Za-z0-9_.]*\s*\()/

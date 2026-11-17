@@ -1,0 +1,27 @@
+rule: contexts/nominations-alone
+files:
+  go.mod: 'module gentalent
+
+
+    go 1.27
+
+    '
+  internal/messaging/domain/message.go: 'package domain
+
+
+    const Mark = 1
+
+    '
+  internal/shared/clock/clock.go: 'package clock
+
+
+    const Mark = 1
+
+    '
+  internal/nominations/delivery/chat/route.go: "package chat\n\nimport (\n\t\"gentalent/internal/messaging/domain\"\n\t\"gentalent/internal/shared/clock\"\n)\n\nvar _ = domain.Mark\nvar _ = clock.Mark\n"
+  internal/nominations/delivery/chat/route_test.go: "package chat\n\nimport (\n\t\"gentalent/internal/messaging/domain\"\n)\n\nvar _ = domain.Mark\n"
+expect:
+- kind: violation
+  path: internal/nominations/delivery/chat/route.go
+  line: 4
+  message: import "gentalent/internal/messaging/domain" resolves to Zone(s) ["domain", "messaging"], not in the allow-list of Zone "nominations"

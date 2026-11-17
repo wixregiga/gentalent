@@ -1,0 +1,23 @@
+rule: cqrs/read-models-read-only
+files:
+  go.mod: "module gentalent\n\ngo 1.27\n\nrequire (\n\tgithub.com/beeper/desktop-api-go/v6 v6.0.0\n\tmodernc.org/sqlite v1.40.0\n)\n"
+  internal/nominations/infra/sqlite/read_status.go: 'package sqlite
+
+
+    const statusQuery = `SELECT number FROM nominations`
+
+
+    const sneaky = `UPDATE nominations SET open = 0`
+
+    '
+  internal/nominations/infra/sqlite/group_store.go: 'package sqlite
+
+
+    const save = `UPDATE nominations SET open = 0`
+
+    '
+expect:
+- kind: violation
+  path: internal/nominations/infra/sqlite/read_status.go
+  line: 5
+  message: forbidden content matching /\.Exec(Context)?\(|\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP)\b/

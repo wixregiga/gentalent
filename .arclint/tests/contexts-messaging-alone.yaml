@@ -1,0 +1,20 @@
+rule: contexts/messaging-alone
+files:
+  go.mod: 'module gentalent
+
+
+    go 1.27
+
+    '
+  internal/nominations/domain/group.go: 'package domain
+
+
+    const Mark = 1
+
+    '
+  internal/messaging/app/command/poll.go: "package command\n\nimport (\n\t\"gentalent/internal/nominations/domain\"\n)\n\nvar _ = domain.Mark\n"
+expect:
+- kind: violation
+  path: internal/messaging/app/command/poll.go
+  line: 4
+  message: import "gentalent/internal/nominations/domain" resolves to Zone(s) ["domain", "nominations"], not in the allow-list of Zone "messaging"

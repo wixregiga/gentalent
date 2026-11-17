@@ -1,0 +1,18 @@
+rule: cqrs/queries-hold-readers
+files:
+  go.mod: "module gentalent\n\ngo 1.27\n\nrequire (\n\tgithub.com/beeper/desktop-api-go/v6 v6.0.0\n\tmodernc.org/sqlite v1.40.0\n)\n"
+  internal/nominations/app/query/status.go: "package query\n\nimport \"gentalent/internal/nominations/port\"\n\ntype Status struct {\n\tGroups port.GroupStore\n\tRecords port.GroupReader\n}\n"
+  internal/nominations/port/group_reader.go: 'package port
+
+
+    type GroupReader interface{ Open() }
+
+
+    type GroupStore interface{ Save() }
+
+    '
+expect:
+- kind: violation
+  path: internal/nominations/app/query/status.go
+  line: 6
+  message: forbidden content matching /port\.[A-Za-z]*(Store|Writer|Log|Outbox|Sender|Clock)\b/

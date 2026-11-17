@@ -1,0 +1,39 @@
+rule: ports/interfaces-in-port-zone
+files:
+  go.mod: "module gentalent\n\ngo 1.27\n\nrequire (\n\tgithub.com/beeper/desktop-api-go/v6 v6.0.0\n\tmodernc.org/sqlite v1.40.0\n)\n"
+  internal/nominations/port/group_store.go: 'package port
+
+
+    type GroupStore interface{ Save() error }
+
+    '
+  internal/nominations/infra/sqlite/group_store.go: 'package sqlite
+
+
+    type execer interface{ Exec() error }
+
+
+    type Store struct{}
+
+    '
+  internal/nominations/infra/sqlite/group_store_test.go: 'package sqlite
+
+
+    type fake interface{ Exec() error }
+
+    '
+  cmd/gentalent/engine.go: 'package main
+
+
+    type lane interface{ Run() }
+
+    '
+expect:
+- kind: violation
+  path: internal/nominations/infra/sqlite/group_store.go
+  line: 3
+  message: interface execer is declared outside a port folder; declare it in the hexagon's port package, or use the concrete type
+- kind: violation
+  path: cmd/gentalent/engine.go
+  line: 3
+  message: interface lane is declared outside a port folder; declare it in the hexagon's port package, or use the concrete type

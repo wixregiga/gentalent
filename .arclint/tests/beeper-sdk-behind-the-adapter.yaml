@@ -1,0 +1,26 @@
+rule: beeper/sdk-behind-the-adapter
+files:
+  go.mod: "module gentalent\n\ngo 1.27\n\nrequire (\n\tgithub.com/beeper/desktop-api-go/v6 v6.0.0\n\tmodernc.org/sqlite v1.40.0\n)\n"
+  internal/messaging/infra/beeper/client.go: 'package beeper
+
+
+    import beeperdesktopapi "github.com/beeper/desktop-api-go/v6"
+
+
+    var _ = beeperdesktopapi.NewClient
+
+    '
+  cmd/gentalent/main.go: 'package main
+
+
+    import beeperdesktopapi "github.com/beeper/desktop-api-go/v6"
+
+
+    var _ = beeperdesktopapi.NewClient
+
+    '
+expect:
+- kind: violation
+  path: cmd/gentalent/main.go
+  line: 3
+  message: forbidden content matching /"github\.com/beeper/desktop-api-go/

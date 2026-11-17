@@ -1,0 +1,26 @@
+rule: ports/declare-contracts-only
+files:
+  go.mod: 'module gentalent
+
+
+    go 1.27
+
+    '
+  internal/nominations/domain/group.go: 'package domain
+
+
+    const Mark = 1
+
+    '
+  internal/nominations/app/command/nominate.go: 'package command
+
+
+    const Mark = 1
+
+    '
+  internal/nominations/port/group_store.go: "package port\n\nimport (\n\t\"gentalent/internal/nominations/app/command\"\n\t\"gentalent/internal/nominations/domain\"\n)\n\nvar _ = command.Mark\nvar _ = domain.Mark\n"
+expect:
+- kind: violation
+  path: internal/nominations/port/group_store.go
+  line: 4
+  message: import "gentalent/internal/nominations/app/command" resolves to Zone(s) ["application", "command", "nominations"], not in the allow-list of Zone "port"

@@ -1,0 +1,9 @@
+rule: domain/no-transport-tags
+files:
+  go.mod: "module gentalent\n\ngo 1.27\n\nrequire (\n\tgithub.com/beeper/desktop-api-go/v6 v6.0.0\n\tmodernc.org/sqlite v1.40.0\n)\n"
+  internal/nominations/domain/person.go: "package domain\n\ntype Person struct {\n\tName string `json:\"name\"`\n}\n"
+expect:
+- kind: violation
+  path: internal/nominations/domain/person.go
+  line: 4
+  message: forbidden content matching /`(json|yaml|toml|db):/

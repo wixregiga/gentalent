@@ -1,0 +1,20 @@
+rule: cqrs/queries-apart-from-commands
+files:
+  go.mod: 'module gentalent
+
+
+    go 1.27
+
+    '
+  internal/nominations/app/command/vote.go: 'package command
+
+
+    const Mark = 1
+
+    '
+  internal/nominations/app/query/status.go: "package query\n\nimport (\n\t\"gentalent/internal/nominations/app/command\"\n)\n\nvar _ = command.Mark\n"
+expect:
+- kind: violation
+  path: internal/nominations/app/query/status.go
+  line: 4
+  message: import "gentalent/internal/nominations/app/command" resolves to Zone(s) ["application", "command", "nominations"], not in the allow-list of Zone "query"

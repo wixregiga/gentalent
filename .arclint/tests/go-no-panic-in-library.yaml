@@ -1,0 +1,15 @@
+rule: go/no-panic-in-library
+files:
+  go.mod: "module gentalent\n\ngo 1.27\n\nrequire (\n\tgithub.com/beeper/desktop-api-go/v6 v6.0.0\n\tmodernc.org/sqlite v1.40.0\n)\n"
+  internal/nominations/domain/group.go: "package domain\n\nfunc Must(err error) {\n\tif err != nil {\n\t\tpanic(err)\n\t}\n}\n"
+  internal/nominations/domain/group_test.go: 'package domain
+
+
+    func helper() { panic("fixture") }
+
+    '
+expect:
+- kind: violation
+  path: internal/nominations/domain/group.go
+  line: 5
+  message: forbidden content matching /\bpanic\s*\(/

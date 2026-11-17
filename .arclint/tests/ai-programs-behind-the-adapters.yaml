@@ -1,0 +1,26 @@
+rule: ai/programs-behind-the-adapters
+files:
+  go.mod: "module gentalent\n\ngo 1.27\n\nrequire (\n\tgithub.com/beeper/desktop-api-go/v6 v6.0.0\n\tmodernc.org/sqlite v1.40.0\n)\n"
+  internal/ai/infra/agents/codex.go: 'package agents
+
+
+    import "os/exec"
+
+
+    var _ = exec.Command
+
+    '
+  internal/messaging/infra/beeper/bbctl.go: 'package beeper
+
+
+    import "os/exec"
+
+
+    var _ = exec.Command
+
+    '
+expect:
+- kind: violation
+  path: internal/messaging/infra/beeper/bbctl.go
+  line: 3
+  message: forbidden content matching /"os/exec"/

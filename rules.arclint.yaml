@@ -1,14 +1,15 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/docs/schemas/rules.arclint.schema.json
-# ArcLint architecture contracts.
-# Grow this file zone by zone: declare real Zones under `zones`,
-# then state what each may import under `rules`.
-# Query commands: arclint rules [selector] · arclint context <path>
+# GenTalent: three hexagons that never import each other, wired only in cmd/.
+# internal/nominations is the nomination process, internal/messaging carries the
+# Group's conversation on whatever platform, internal/ai runs AI agents for the
+# Group. internal/shared has no product meaning. Inside each hexagon: domain,
+# app (commands and queries), port (every interface), infra (driven adapters),
+# delivery (driving adapters). doc/architecture.md is the map.
+# Ask before editing: arclint context <path> · arclint rules [selector]
 
-runtime: [py]
+runtime: [go]
 
 scan:
-  # error | warn | ignore for imports that classify neither stdlib,
-  # internal, nor declared in the dependency manifest.
   unknown_imports: warn
   # Git-ignored runtime copies and data. ArcLint walks ignored paths, and the
   # main checkout's .live/ holds a second full copy of the code.
@@ -19,27 +20,260 @@ scan:
     - ".venv/**"
 
 domain:
-  # The file this repository writes its Ubiquitous Language in, YAML (.yaml, .yml) or CML (.cml).
   file: domain.arclint.yaml
 
+extends:
+  - pattern: arclint/hexagonal@0.1.0
+    bind:
+      domain: "internal/*/domain/**"
+      application: ["internal/*/app/**", "internal/*/port/**"]
+      driving: "internal/*/delivery/**"
+      driven: "internal/*/infra/**"
+      shared: "internal/shared/**"
+      composition: "cmd/**"
+
 zones:
-  # A Zone is a name and the paths it owns: one glob, a list of globs,
-  # or {paths, description}. Split into real Zones as the architecture
-  # takes shape.
-  source: "**"
+  nominations:
+    paths: "internal/nominations/**"
+    description: "The nomination process (context nominations): the Group aggregate, its commands and queries, its store, and the chat commands Members type."
+  messaging:
+    paths: "internal/messaging/**"
+    description: "The Group's conversation (context messaging): messages in, replies out exactly once, and the Beeper adapter, the only code that knows the platform."
+  ai:
+    paths: "internal/ai/**"
+    description: "AI agents that do work for the Group (context ai): finding a Person's photos through the codex, claude and agy programs."
+  port:
+    paths: "internal/*/port/**"
+    description: "Every interface of a hexagon: what its use cases need from adapters. Declares contracts and the plain values they pass."
+  command:
+    paths: "internal/*/app/command/**"
+    description: "Write side: one file per command and its handler. Changes the hexagon's state through its ports."
+  query:
+    paths: "internal/*/app/query/**"
+    description: "Read side: one file per query and its handler. Changes nothing."
+  sql_store:
+    paths: ["internal/*/infra/sqlite/**", "internal/shared/sqlitedb/**"]
+    description: "The only code that speaks SQL: each hexagon's own database, its migrations, and the product-free open, migrate and backup helpers."
+  beeper_adapter:
+    paths: "internal/messaging/infra/beeper/**"
+    description: "The Beeper Desktop API adapter, the only importer of the Beeper SDK."
+  ai_programs:
+    paths: "internal/ai/infra/**"
+    description: "The adapters that start the AI programs and image tools, the only code that runs other programs."
 
 rules:
-  # Every Rule has an id, the Zone(s) it judges under `on`, and exactly
-  # one constraint: imports, structure, naming, content, layers,
-  # imported_by, independent, acyclic, or uses.
-  source/dependencies:
-    rationale: "Source imports no other declared Zone."
-    on: source
+  hexagon/dependencies-inward:
+    rationale: "Dependencies point from wiring through adapters and use cases to the model."
+    layers: [composition, driving, driven, application, domain, shared]
+
+  hexagon/no-cycles:
+    rationale: "The six parts of the hexagon form no import cycle."
+    acyclic: [composition, driving, driven, application, domain, shared]
+
+  contexts/nominations-alone:
+    rationale: "The nomination process imports no other hexagon. What it needs from outside is a port that cmd satisfies."
+    on: nominations
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Tests wire fakes across zones."
     imports:
-      # An allow-list of other declared Zones. Empty means this Zone
-      # may import no other declared Zone; with one Zone this is
-      # vacuously true and starts binding the moment you split Zones.
+      internal: [shared]
+
+  contexts/messaging-alone:
+    rationale: "Messaging imports no other hexagon; it moves messages and knows no command, vote or photo."
+    on: messaging
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Tests wire fakes across zones."
+    imports:
+      internal: [shared]
+
+  contexts/ai-alone:
+    rationale: "AI imports no other hexagon; it is given a subject and returns what it found."
+    on: ai
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Tests wire fakes across zones."
+    imports:
+      internal: [shared]
+
+  domain/standard-library-only:
+    rationale: "The model imports the Go standard library and nothing else, internal/shared included; ArcLint's built-in domain_isolation rule refuses a model that imports shared code."
+    on: domain
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Tests are not the model."
+    imports:
       internal: []
+      external: forbid
+
+  domain/no-effect-imports:
+    rationale: "The model decides and performs no effect. Declare the effect as a port and implement it in infra."
+    on: domain
+    files: "internal/*/domain/**/*.go"
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Test fixtures may use IO."
+    content:
+      forbid: '"(os|os/exec|io/fs|net|net/http|database/sql|encoding/json|encoding/xml|encoding/gob)"'
+
+  domain/no-transport-tags:
+    rationale: "Model values carry no serialization tags; adapters map them to rows and payloads."
+    on: domain
+    files: "internal/*/domain/**/*.go"
+    content:
+      forbid: '`(json|yaml|toml|db):'
+
+  domain/aggregate-has-its-file:
+    rationale: "Every recorded aggregate has a file named after it, so a reader finds the root without searching."
+    on: domain
+    structure:
+      each: domain.aggregates
+      require: ["internal/nominations/domain/{name:snake_case}.go"]
+
+  ports/declare-contracts-only:
+    rationale: "A port names what a use case needs in the model's terms; it imports only the model and shared code, never a use case or an adapter."
+    on: port
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Tests wire fakes across zones."
+    imports:
+      internal: [domain, shared]
+
+  ports/interfaces-in-port-zone:
+    rationale: "Every interface is a port and lives in its hexagon's port package, so an agent finds every seam in one place and no adapter or use case grows a private abstraction."
+    files: ["internal/**/*.go", "cmd/**/*.go"]
+    uses: ports/interfaces-in-port-zone
+    with:
+      portZones: [port]
+
+  app/no-direct-io:
+    rationale: "Use cases coordinate ports; adapters perform IO. A tripwire for the named imports, not a proof."
+    on: application
+    files: "internal/*/app/**/*.go"
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Test fixtures may use IO."
+    content:
+      forbid: '"(os|os/exec|io/fs|net|net/http|database/sql)"'
+
+  cqrs/commands-apart-from-queries:
+    rationale: "The command side imports the model, its ports and shared code, never the query side."
+    on: command
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Tests wire fakes across zones."
+    imports:
+      internal: [domain, port, shared]
+
+  cqrs/queries-apart-from-commands:
+    rationale: "The query side imports the model, its ports and shared code, never the command side."
+    on: query
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Tests wire fakes across zones."
+    imports:
+      internal: [domain, port, shared]
+
+  cqrs/queries-hold-readers:
+    rationale: "A query holds only read ports, named ...Reader, so it cannot reach a port that changes state. A tripwire; the read adapters also open the database read-only."
+    on: query
+    files: "internal/*/app/query/**/*.go"
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Tests may build any port."
+    content:
+      forbid: 'port\.[A-Za-z]*(Store|Writer|Log|Outbox|Sender|Clock)\b'
+
+  cqrs/read-models-read-only:
+    rationale: "Read models in read_*.go run no statement that changes data. A tripwire; the read side also opens the database read-only."
+    on: sql_store
+    files: "internal/*/infra/sqlite/read_*.go"
+    content:
+      forbid: '\.Exec(Context)?\(|\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP)\b'
+
+  concurrency/goroutines-at-the-edge:
+    rationale: "Only cmd and the delivery adapters start goroutines. Models, use cases, ports, driven adapters and shared code are plain blocking calls, so each is tested without timing."
+    on: [domain, application, driven, shared]
+    files: "internal/**/*.go"
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Tests may start goroutines to exercise blocking calls."
+    content:
+      forbid: '(?m)(^\s*|[;{]\s*)go\s+(func\b|[A-Za-z_][A-Za-z0-9_.]*\s*\()'
+
+  beeper/sdk-behind-the-adapter:
+    rationale: "Only the Beeper adapter imports the Beeper SDK, so a change in Beeper, or a move to another platform, is repaired in one folder."
+    files: ["internal/**/*.go", "cmd/**/*.go"]
+    exclude:
+      paths: ["internal/messaging/infra/beeper/**"]
+      reason: "The Beeper adapter owns the SDK."
+    content:
+      forbid: '"github\.com/beeper/desktop-api-go'
+
+  sqlite/sql-behind-the-store:
+    rationale: "Only the SQL store zone imports database/sql or the SQLite driver; composition opens databases through it."
+    files: ["internal/**/*.go", "cmd/**/*.go"]
+    exclude:
+      paths: ["internal/*/infra/sqlite/**", "internal/shared/sqlitedb/**"]
+      reason: "The SQL store owns SQL."
+    content:
+      forbid: '"(database/sql(/driver)?|modernc\.org/sqlite[^"]*)"'
+
+  ai/programs-behind-the-adapters:
+    rationale: "Only the ai hexagon's adapters start other programs."
+    files: ["internal/**/*.go", "cmd/**/*.go"]
+    exclude:
+      paths: ["internal/ai/infra/**", "**/*_test.go"]
+      reason: "The ai adapters own the AI programs and image tools; tests may start helper programs."
+    content:
+      forbid: '"os/exec"'
+
+  go/concept-named-files:
+    rationale: "A file is named for the one concept, command, query or adapter it holds, never for a generic container."
+    on: [domain, application, driving, driven, shared, composition]
+    structure:
+      forbid:
+        - "**/model.go"
+        - "**/models.go"
+        - "**/types.go"
+        - "**/utils.go"
+        - "**/util.go"
+        - "**/helpers.go"
+        - "**/common.go"
+        - "**/misc.go"
+
+  go/snake-case-files:
+    rationale: "Go file names use snake_case so files are easy to find and scan."
+    on: [domain, application, driving, driven, shared, composition]
+    naming: snake_case
+
+  go/no-panic-in-library:
+    rationale: "Library code returns errors; a panic would stop the bot for the whole Group."
+    files: "internal/**/*.go"
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Test helpers may panic to fail fixture setup."
+    content:
+      forbid: '\bpanic\s*\('
+
+  go/no-process-exit-in-library:
+    rationale: "Only cmd decides to end the process; library code returns errors."
+    files: "internal/**/*.go"
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Test helpers are outside the library contract."
+    content:
+      forbid: '\b(os\.Exit|log\.(Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln))\s*\('
+
+  go/no-direct-stdout-in-library:
+    rationale: "Library code writes to a supplied writer or logger, never to process stdout."
+    files: "internal/**/*.go"
+    exclude:
+      paths: ["**/*_test.go"]
+      reason: "Test output is outside the library contract."
+    content:
+      forbid: '\bfmt\.(Print|Printf|Println)\s*\('
 
   source/no-comments:
     rationale: "Code carries its meaning in names, types, and tests; comments drift from the code they describe, and lint or type-checker suppressions hide what should be fixed. Compiler directives, license identifiers, and generated files stay. A comment or suppression about something we cannot change stays only through a keep entry that records the proof. Judges Go only: the Python tree is being replaced, and the Go tree starts clean."

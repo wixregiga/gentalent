@@ -1,0 +1,20 @@
+rule: hexagon/dependencies-inward
+files:
+  go.mod: 'module gentalent
+
+
+    go 1.27
+
+    '
+  internal/nominations/infra/sqlite/group_store.go: 'package sqlite
+
+
+    const Mark = 1
+
+    '
+  internal/nominations/app/command/vote.go: "package command\n\nimport (\n\t\"gentalent/internal/nominations/infra/sqlite\"\n)\n\nvar _ = sqlite.Mark\n"
+expect:
+- kind: violation
+  path: internal/nominations/app/command/vote.go
+  line: 4
+  message: 'Zone "application" (layer 3) may not import higher layer "driven" (layer 2): import of "gentalent/internal/nominations/infra/sqlite"'
