@@ -33,47 +33,71 @@ contexts:
               Person or a Nomination, which it refers to by its identity.
             identity: ShameID
         invariants:
-          nomination-limit-not-less-than-one: Every nomination limit a Group sets is at least one.
-          one-open-nomination-per-person: A Person may only have one open Nomination at a time.
+          nomination-limit-not-less-than-one:
+            statement: Every nomination limit a Group sets is at least one.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestNominationLimitNotLessThanOne
+          one-open-nomination-per-person:
+            statement: A Person may only have one open Nomination at a time.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestOneOpenNominationPerPerson
         assertions:
           open-nominations-within-group-limit:
             on: Nominate
             statement: >-
               A Member nominates a person only while the Group has fewer open
               Nominations than its open nomination limit.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestOpenNominationsWithinGroupLimit
+              - internal/nominations/domain/group_test.go:TestLoweringTheGroupLimitRefusesOnlyNewNominations
           open-nominations-within-member-limit:
             on: Nominate
             statement: >-
               A Member nominates a person only while that Member has fewer open
               Nominations than the member open nomination limit.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestOpenNominationsWithinMemberLimit
           nominations-per-message-within-limit:
             on: Nominate
             statement: >-
               One message nominates no more people than the single message
               nomination limit.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestNominationsPerMessageWithinLimit
           vote-names-its-nomination:
             on: CastVote
             statement: >-
               A Member's vote names its Nomination whenever more than one
               Nomination is open.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestVoteNamesItsNomination
+              - internal/nominations/domain/group_test.go:TestUnnamedVoteCountsWithOneOpenNomination
           renominated-only-through-renomination:
             on: Nominate
             statement: >-
               A Person may only be renominated through the renomination process.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestRenominatedOnlyThroughRenomination
           renominated-only-when-rejected:
             on: Renominate
             statement: >-
               A Person may only be renominated if their certification status has
               been rejected.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestRenominatedOnlyWhenRejected
           renominated-only-when-group-allows:
             on: Renominate
             statement: >-
               A Person may only be renominated if the Group allows renomination.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestRenominatedOnlyWhenGroupAllows
           message-nominates-all-or-none:
             on: Nominate
             statement: >-
               A message that nominates more people than the limits have room for
               nominates no one.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestMessageNominatesAllOrNone
     value_objects:
       CertificationStatus:
         definition: >-
