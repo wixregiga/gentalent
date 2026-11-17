@@ -116,6 +116,14 @@ steady_pid() {
   return 1
 }
 
+backup="$(dirname "$live_db")/backups/$(basename "$live_db" .sqlite3)-$(date +%Y%m%d-%H%M%S)-before-${target:0:7}.sqlite3"
+mkdir -p "$(dirname "$backup")"
+"$python" -c 'import sqlite3, sys
+src = sqlite3.connect(sys.argv[1]); dst = sqlite3.connect(sys.argv[2])
+src.backup(dst); dst.close(); src.close()' "$live_db" "$backup"
+chmod 600 "$backup"
+echo "Backed up the ballot to $backup"
+
 old_pid="$(daemon_pid)"
 pin "$target"
 restart

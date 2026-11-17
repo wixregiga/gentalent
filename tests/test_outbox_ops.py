@@ -65,6 +65,15 @@ class ResolveSendTest(unittest.TestCase):
         resolve_send(self.db, self.api, self.text_id, "264")
         self.assertEqual(self.row(self.text_id), ("sent", "264"))
 
+    def test_text_match_ignores_line_break_normalization(self):
+        with self.db:
+            self.db.execute("UPDATE outbox SET text=? WHERE id=?",
+                            ("@gentalent-bot says: Title  \nLine two\n\nFooter", self.text_id))
+        self.api.messages["270"] = {"id": "270", "isSender": True,
+                                    "text": "@gentalent-bot says: Title\nLine two\n\nFooter"}
+        resolve_send(self.db, self.api, self.text_id, "270")
+        self.assertEqual(self.row(self.text_id), ("sent", "270"))
+
     def test_photo_reply_needs_same_file_name_and_byte_size(self):
         for bad in ("268", "269"):
             with self.assertRaises(ValueError):

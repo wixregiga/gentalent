@@ -65,6 +65,11 @@ def new_messages(api, cursor, after):
         cursor = newest
 
 
+def same_text(a, b):
+    """Compare reply text ignoring whitespace; Beeper may normalize line breaks on the way out."""
+    return " ".join((a or "").split()) == " ".join((b or "").split())
+
+
 def delivery_state(message, pending_id):
     """Classify a message retrieved by its pendingMessageID.
 
@@ -190,7 +195,7 @@ def resolve_send(db, api, outbox_id, message_id=None):
         found = [(a.get("fileName"), a.get("fileSize")) for a in message.get("attachments") or []]
         if not local.is_file() or found != [(local.name, local.stat().st_size)]:
             raise ValueError(f"Message {message_id} does not carry this reply's {local.name}.")
-    elif message.get("text") != row["text"]:
+    elif not same_text(message.get("text"), row["text"]):
         raise ValueError(f"Message {message_id} text differs from reply {outbox_id}.")
     with db:
         changed = db.execute(
@@ -239,6 +244,6 @@ def contract_report(api, db, spec):
             failures.append(f"Delivered reply {row['id']} (message {row['final_id']}) now reads as {state}.")
         if not message.get("isSender"):
             failures.append(f"Message {row['final_id']} no longer reads as sent by this account.")
-        if not row["attachment_path"] and message.get("text") != row["text"]:
+        if not row["attachment_path"] and not same_text(message.get("text"), row["text"]):
             failures.append(f"Message {row['final_id']} text differs from what was sent.")
     return failures

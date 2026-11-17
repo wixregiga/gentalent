@@ -115,8 +115,11 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual(attach, "")
         self.assertEqual(
             reply,
-            "@gentalent-bot says: @Me would like to nominate Eva Longoria as a 2026 Generational Talent Nominee "
-            "(3/3 YES certifies; any NO denies forever). Vote with !!Y, !!N, or !!C (!gthelp for rules). 1/3 votes are in.",
+            "@gentalent-bot says: @Me would like to nominate Eva Longoria as a 2026 Generational Talent Nominee!  \n"
+            "3/3 YES certifies. Any NO denies forever.  \n"
+            "1/3 votes are in.\n\n"
+            "Vote: !!Y yes · !!N no · !!C clear  \n"
+            "Rules: !gthelp",
         )
         self.assertEqual(self.store.current()["phase"], "voting")
         self.assertEqual(self.store.current()["name"], "Eva Longoria")
@@ -130,7 +133,7 @@ class WorkflowTest(unittest.TestCase):
         self.assertTrue(handled)
         self.assertEqual(
             reply,
-            "@gentalent-bot says: @Person2 has voted for Eva Longoria to be a generational talent! 2/3 votes submitted.",
+            "@gentalent-bot says: @Person2 has voted for Eva Longoria to be a generational talent!  \n2/3 votes in.",
         )
 
         # More casual banter ignored
@@ -144,7 +147,8 @@ class WorkflowTest(unittest.TestCase):
         # Third member votes !!YES -> 3/3 votes in, enters 1-minute finalization buffer
         handled, reply, _ = self.send("person1", "!!YES")
         self.assertTrue(handled)
-        self.assertIn("Finalizing in 1 minute", reply)
+        self.assertIn("3/3 votes in. Result in 1 minute.", reply)
+        self.assertIn("Finish now: !final (@Me)", reply)
         self.assertEqual(self.store.current()["phase"], "voting")
 
         # Non-nominator cannot finalize early
@@ -193,7 +197,7 @@ class WorkflowTest(unittest.TestCase):
         _, reply, _ = self.send("me", "!!n")
         self.assertEqual(
             reply,
-            "@gentalent-bot says: @Me changed their vote to NO on Samuel L. Jackson. 1/3 votes submitted.",
+            "@gentalent-bot says: @Me changed their vote to NO on Samuel L. Jackson.  \n1/3 votes in.",
         )
         # Repeating !!N is silent
         _, reply, _ = self.send("me", "!!no")
@@ -203,7 +207,7 @@ class WorkflowTest(unittest.TestCase):
         _, reply, _ = self.send("me", "!!CLEAR")
         self.assertEqual(
             reply,
-            "@gentalent-bot says: @Me cleared their vote on Samuel L. Jackson. 0/3 votes submitted.",
+            "@gentalent-bot says: @Me cleared their vote on Samuel L. Jackson.  \n0/3 votes in.",
         )
         # Clearing again while empty is silent
         _, reply, _ = self.send("me", "!!c")
@@ -223,7 +227,7 @@ class WorkflowTest(unittest.TestCase):
         self.send("me", "!!y")
         self.send("person1", "!!n")
         _, reply, _ = self.send("person2", "!!y")
-        self.assertIn("3/3 votes submitted", reply)
+        self.assertIn("3/3 votes in", reply)
         self.assertEqual(self.store.current()["phase"], "voting")
 
         # Votes are locked after 3rd vote cast: repeating same vote is silent, changing is blocked
@@ -285,7 +289,7 @@ class WorkflowTest(unittest.TestCase):
         # Upgrading an active !gt nomination via !!gt invokes AI once
         handled, reply, attach = self.send("person1", "!!gt Welvin Harris. Add photos.")
         self.assertTrue(handled)
-        self.assertIn("Added 3 representative photos", reply)
+        self.assertIn("Added 3 photos for Welvin Harris.", reply)
         self.assertEqual(attach, "")
         self.assertEqual(self.photos, ["01_fake.jpg", "02_fake.jpg", "03_fake.jpg"])
         self.assertEqual(len(self.ai_calls), 1)
@@ -326,7 +330,7 @@ class WorkflowTest(unittest.TestCase):
             handled, reply, attach = self.send("person1", cmd)
             self.assertTrue(handled)
             self.assertEqual(attach, "")
-            self.assertIn("Rules:", reply)
+            self.assertIn("How GenTalent works", reply)
             self.assertIn("!gtstatus", reply)
             self.assertIn("!gtlist", reply)
             self.assertIsNone(self.store.current())
@@ -342,21 +346,22 @@ class WorkflowTest(unittest.TestCase):
         for cmd in ("!gtstatus",):
             handled, reply, _ = self.send("me", cmd)
             self.assertTrue(handled)
-            self.assertIn("No active nomination", reply)
+            self.assertIn("No vote right now", reply)
+            self.assertIn("Last: Prior Denied, denied", reply)
             self.assertIn("0 certified, 1 denied", reply)
             self.assertIn("!gt Name. Pitch", reply)
 
         for cmd in ("!gtlist",):
             handled, reply, _ = self.send("me", cmd)
             self.assertTrue(handled)
-            self.assertIn("Winners (0): none yet", reply)
-            self.assertIn("Current nominee: none", reply)
+            self.assertIn("Winners (0)  \nNone yet", reply)
+            self.assertIn("Now voting: none", reply)
 
         for cmd in ("!gtlist losers",):
             handled, reply, _ = self.send("me", cmd)
             self.assertTrue(handled)
-            self.assertIn("Losers (1): Prior Denied", reply)
-            self.assertIn("Current nominee: none", reply)
+            self.assertIn("Losers (1)  \n🚫 Prior Denied", reply)
+            self.assertIn("Now voting: none", reply)
 
         # Invalid list mode
         _, reply, _ = self.send("me", "!gtlist invalid")
@@ -365,28 +370,28 @@ class WorkflowTest(unittest.TestCase):
         # 3. Active 1/3 !gtstatus & !gtlist
         self.send("me", "!gt Eva Longoria. Iconic.")
         _, reply, _ = self.send("person1", "!gtstatus")
-        self.assertIn("Active: Eva Longoria (1/3", reply)
-        self.assertIn("@Me:YES", reply)
-        self.assertIn("waiting on @Person1, @Person2", reply)
-        self.assertIn("!!gt Eva Longoria for photos", reply)
+        self.assertIn("Now voting: Eva Longoria  \n1/3 votes in.", reply)
+        self.assertIn("✅ Me: YES  \n⏳ Person1: waiting  \n⏳ Person2: waiting", reply)
+        self.assertIn("Photos: send !!gt Eva Longoria", reply)
+        self.assertIn("Vote: !!Y yes · !!N no · !!C clear", reply)
 
         _, reply, _ = self.send("person2", "!gtlist winners")
-        self.assertIn("Winners (0): none yet", reply)
-        self.assertIn("Current nominee: Eva Longoria (1/3 votes in)", reply)
+        self.assertIn("Winners (0)  \nNone yet", reply)
+        self.assertIn("Now voting: Eva Longoria (1/3 votes in)", reply)
 
         # 4. Locked 3/3 !gtstatus & certified !gtlist
         self.send("person1", "!!y")
         self.send("person2", "!!y")
         self.now[0] += 15.0
         _, reply, _ = self.send("person1", "!gtstatus")
-        self.assertIn("3/3 locked", reply)
-        self.assertIn("finalizing in ~45s", reply)
-        self.assertIn("!final (@Me)", reply)
+        self.assertIn("3/3 votes in, locked. Result in about 45s.", reply)
+        self.assertIn("Finish now: !final (@Me)", reply)
+        self.assertNotIn("Vote: !!Y", reply)
 
         self.send("me", "!final")
         _, reply, _ = self.send("person2", "!gtlist")
-        self.assertIn("Winners (1): Eva Longoria", reply)
-        self.assertIn("Current nominee: none", reply)
+        self.assertIn("Winners (1)  \n🏆 Eva Longoria", reply)
+        self.assertIn("Now voting: none", reply)
         self.assertEqual(self.ai_calls, [])
 
     def test_unrequested_short_aliases_are_not_commands(self):
@@ -474,3 +479,21 @@ class WorkflowTest(unittest.TestCase):
         data = dict(self.config.data, photo_layout="grid", members=self.config.data["members"])
         with self.assertRaises(ValueError):
             Config(data, self.config.root).photo_layout
+
+    def test_no_reply_line_starts_with_markdown_syntax(self):
+        import re
+        self.send("me", "!gthelp")
+        self.send("me", "!gtstatus")
+        self.send("me", "!gt Eva Longoria. Iconic.")
+        self.send("person1", "!!n")
+        self.send("me", "!gtstatus")
+        self.send("person1", "!gtlist")
+        self.send("person1", "!gtlist losers")
+        texts = [r[0] for r in self.store.db.execute("SELECT text FROM outbox WHERE text <> ''")]
+        self.assertGreaterEqual(len(texts), 7)
+        for text in texts:
+            for line in text.split("\n"):
+                self.assertIsNone(re.match(r"\s*([-*+#>]|\d+[.)])\s", line), line)
+            for block in text.split("\n\n"):
+                inner = block.split("\n")
+                self.assertTrue(all(line.endswith("  ") for line in inner[:-1]), block)

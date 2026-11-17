@@ -355,8 +355,8 @@ def check_state(store, request: ActionRequest, normalized_fn, rule_error_cls) ->
 
         if cur["all_votes_at"] is not None or votes_in >= 3:
             raise rule_error_cls(
-                f"Voting is locked with 3/3 votes in on {cur['name']}; finalizing in under a minute "
-                f"(or @{nominator_name} can send !final)."
+                _block(f"Voting is locked: 3/3 votes are in on {cur['name']}.",
+                       f"Result in under a minute, or @{nominator_name} can send !final.")
             )
 
         return StateCheck(
@@ -453,12 +453,36 @@ def _create_case_and_auto_yes(store, request: ActionRequest, check: StateCheck, 
     return case_id
 
 
-def _nomination_prompt(actor_name: str, canonical_name: str, year: int) -> str:
-    return (
-        f"@{actor_name} would like to nominate {canonical_name} as a "
-        f"{year} Generational Talent Nominee (3/3 YES certifies; any NO denies forever). "
-        f"Vote with !!Y, !!N, or !!C (!gthelp for rules). 1/3 votes are in."
+# Replies go through Beeper's text input, which accepts plain text or Markdown and does not
+# say how it treats line breaks. Lines inside a block end with Markdown hard breaks (two
+# trailing spaces, invisible as plain text); blocks are separated by a blank line. No line
+# may start with Markdown syntax (-, *, +, #, >, "1.").
+def _block(*lines: str) -> str:
+    return "  \n".join(line for line in lines if line)
+
+
+def _message(*blocks: str) -> str:
+    return "\n\n".join(block for block in blocks if block)
+
+
+VOTE_KEYS = "Vote: !!Y yes · !!N no · !!C clear"
+NOMINATE_KEYS = _block("Nominate: !gt Name. Pitch", "With photos: !!gt Name. Pitch")
+
+
+def _nomination_prompt(actor_name: str, canonical_name: str, year: int, note: str = "") -> str:
+    return _message(
+        _block(
+            f"@{actor_name} would like to nominate {canonical_name} as a {year} Generational Talent Nominee!",
+            "3/3 YES certifies. Any NO denies forever.",
+            "1/3 votes are in.",
+            note,
+        ),
+        _block(VOTE_KEYS, "Rules: !gthelp"),
     )
+
+
+def _votes_line(total: int) -> str:
+    return f"{total}/3 votes in."
 
 
 def _execute_nominate(store, request: ActionRequest, check: StateCheck, normalized_fn) -> None:
@@ -476,11 +500,10 @@ def _execute_generative_nominate(store, request: ActionRequest, check: StateChec
     else:
         case_id = _create_case_and_auto_yes(store, request, check, normalized_fn, ai_invoked=1)
 
-    base_msg = (
-        f"Added 3 representative photos for {check.canonical_name}. {check.votes_in}/3 votes submitted."
-        if check.upgrade_existing_case
-        else _nomination_prompt(request.actor.name, check.canonical_name, request.year)
-    )
+    def announcement(note: str = "") -> str:
+        if check.upgrade_existing_case:
+            return _block(f"Added 3 photos for {check.canonical_name}.", _votes_line(check.votes_in), note)
+        return _nomination_prompt(request.actor.name, check.canonical_name, request.year, note)
 
     try:
         bundle = store.generate_media(check.canonical_name, request.reason)
@@ -497,48 +520,44 @@ def _execute_generative_nominate(store, request: ActionRequest, check: StateChec
             (case_id, exhibit_text),
         )
         if store.config.photo_layout == "stitched":
-            store.queue(base_msg, attachment_path=str(bundle.strip_path), case_id=case_id)
+            store.queue(announcement(), attachment_path=str(bundle.strip_path), case_id=case_id)
         else:
-            store.queue(base_msg, case_id=case_id)
+            store.queue(announcement(), case_id=case_id)
             for photo in bundle.photo_paths:
                 store.queue_photo(photo, case_id)
     except Exception as exc:
-        fallback = (
-            f"Could not generate photos for {check.canonical_name} right now ({exc}). "
-            f"{check.votes_in}/3 votes submitted."
-            if check.upgrade_existing_case
-            else f"{base_msg} (Photo lookup unavailable.)"
-        )
+        if check.upgrade_existing_case:
+            fallback = _block(
+                f"Could not find photos for {check.canonical_name} right now ({exc}).",
+                _votes_line(check.votes_in),
+            )
+        else:
+            fallback = announcement("(Photo lookup unavailable.)")
         store.queue(fallback[:4000], case_id=case_id)
 
 
 def _execute_vote(store, request: ActionRequest, check: StateCheck) -> None:
+    voter, name = request.actor.name, check.canonical_name
+
+    def total() -> int:
+        return store.db.execute("SELECT COUNT(*) FROM votes WHERE case_id=?", (check.case_id,)).fetchone()[0]
+
     if request.vote == "clear":
         store.db.execute(
             "DELETE FROM votes WHERE case_id=? AND sender_id=?",
             (check.case_id, request.actor.id),
         )
-        total = store.db.execute(
-            "SELECT COUNT(*) FROM votes WHERE case_id=?", (check.case_id,)
-        ).fetchone()[0]
-        store.queue(
-            f"@{request.actor.name} cleared their vote on {check.canonical_name}. {total}/3 votes submitted.",
-            case_id=check.case_id,
-        )
+        store.queue(_block(f"@{voter} cleared their vote on {name}.", _votes_line(total())), case_id=check.case_id)
         return
 
+    label = "YES" if request.vote == "yes" else "NO"
     if check.prev_vote is not None:
         store.db.execute(
             "UPDATE votes SET vote=? WHERE case_id=? AND sender_id=?",
             (request.vote, check.case_id, request.actor.id),
         )
-        total = store.db.execute(
-            "SELECT COUNT(*) FROM votes WHERE case_id=?", (check.case_id,)
-        ).fetchone()[0]
-        label = "YES" if request.vote == "yes" else "NO"
         store.queue(
-            f"@{request.actor.name} changed their vote to {label} on {check.canonical_name}. "
-            f"{total}/3 votes submitted.",
+            _block(f"@{voter} changed their vote to {label} on {name}.", _votes_line(total())),
             case_id=check.case_id,
         )
         return
@@ -547,23 +566,14 @@ def _execute_vote(store, request: ActionRequest, check: StateCheck) -> None:
         "INSERT INTO votes(case_id, sender_id, vote) VALUES(?, ?, ?)",
         (check.case_id, request.actor.id, request.vote),
     )
-    total = store.db.execute(
-        "SELECT COUNT(*) FROM votes WHERE case_id=?", (check.case_id,)
-    ).fetchone()[0]
-
-    if request.vote == "yes":
-        base_msg = (
-            f"@{request.actor.name} has voted for {check.canonical_name} to be a generational talent! "
-            f"{total}/3 votes submitted."
-        )
-    else:
-        base_msg = (
-            f"@{request.actor.name} has voted against {check.canonical_name} being a generational talent. "
-            f"{total}/3 votes submitted."
-        )
-
-    if total < 3:
-        store.queue(base_msg, case_id=check.case_id)
+    count = total()
+    headline = (
+        f"@{voter} has voted for {name} to be a generational talent!"
+        if request.vote == "yes"
+        else f"@{voter} has voted against {name} being a generational talent."
+    )
+    if count < 3:
+        store.queue(_block(headline, _votes_line(count)), case_id=check.case_id)
         return
 
     store.db.execute(
@@ -571,48 +581,68 @@ def _execute_vote(store, request: ActionRequest, check: StateCheck) -> None:
         (store.clock(), check.case_id),
     )
     store.queue(
-        f"{base_msg} Finalizing in 1 minute (or @{check.nominator_name} can send !final now).",
+        _block(headline, "3/3 votes in. Result in 1 minute.", f"Finish now: !final (@{check.nominator_name})"),
         case_id=check.case_id,
     )
 
 
 def _execute_help(store) -> None:
-    store.queue(
-        "Rules: 3/3 unanimous YES certifies; any NO denies permanently. Change/clear votes with !!Y, !!N, !!C "
-        "until the 3rd vote locks a 1m timer (or nominator sends !final). "
-        "Commands: !gt Name. Pitch | !!gt Name. Pitch (3 photos) | !!Y / !!N / !!C | !final | !gtstatus | !gtlist [winners|losers]"
-    )
+    store.queue(_message(
+        _block(
+            "How GenTalent works",
+            "3/3 YES certifies. Any NO denies forever.",
+            "Change or clear your vote until the 3rd vote is in.",
+            "Then the result posts in 1 minute, or the nominator sends !final.",
+        ),
+        _block(
+            NOMINATE_KEYS,
+            VOTE_KEYS,
+            "Finish early: !final (nominator)",
+            "Status: !gtstatus",
+            "Lists: !gtlist · !gtlist losers",
+        ),
+    ))
+
+
+def _vote_mark(vote: Optional[str]) -> str:
+    return {"yes": "✅", "no": "❌"}.get(vote or "", "⏳")
 
 
 def _execute_gtstatus(store) -> None:
     winners_count = store.db.execute("SELECT COUNT(*) FROM cases WHERE phase='certified'").fetchone()[0]
     losers_count = store.db.execute("SELECT COUNT(*) FROM denials").fetchone()[0]
+    record = f"Record: {winners_count} certified, {losers_count} denied"
     cur = store.current()
-    if cur and cur["phase"] == "voting":
-        votes = {
-            r["sender_id"]: r["vote"].upper()
-            for r in store.db.execute("SELECT sender_id, vote FROM votes WHERE case_id=?", (cur["id"],)).fetchall()
-        }
-        voted_parts = [f"@{m['name']}:{votes[mid]}" for mid, m in store.config.roster.items() if mid in votes]
-        waiting_parts = [f"@{m['name']}" for mid, m in store.config.roster.items() if mid not in votes]
-        if cur["all_votes_at"] is not None:
-            rem = max(0, int(round(60.0 - (store.clock() - float(cur["all_votes_at"])))))
-            nom_name = store.config.roster[cur["nominator"]]["name"]
-            state_str = f"Active: {cur['name']} (3/3 locked: {', '.join(voted_parts)}; finalizing in ~{rem}s)"
-            cmds_str = f"Commands: !final (@{nom_name}) | !gtlist | !gthelp"
-        else:
-            photos_tag = "photos ready" if cur["ai_invoked"] else f"!!gt {cur['name']} for photos"
-            wait_str = f"; waiting on {', '.join(waiting_parts)}" if waiting_parts else ""
-            state_str = (
-                f"Active: {cur['name']} ({len(votes)}/3 votes: {', '.join(voted_parts) or 'none'}"
-                f"{wait_str}; {photos_tag})"
-            )
-            cmds_str = "Commands: !!Y | !!N | !!C | !gtlist | !gthelp"
+    if not cur or cur["phase"] != "voting":
+        last = f"Last: {cur['name']}, {cur['phase']}" if cur else ""
+        store.queue(_message(
+            _block("No vote right now", last, record),
+            _block(NOMINATE_KEYS, "More: !gtlist · !gthelp"),
+        ))
+        return
+
+    votes = {
+        r["sender_id"]: r["vote"]
+        for r in store.db.execute("SELECT sender_id, vote FROM votes WHERE case_id=?", (cur["id"],)).fetchall()
+    }
+    ballot = [
+        f"{_vote_mark(votes.get(mid))} {m['name']}: {votes[mid].upper() if mid in votes else 'waiting'}"
+        for mid, m in store.config.roster.items()
+    ]
+    if cur["all_votes_at"] is not None:
+        rem = max(0, int(round(60.0 - (store.clock() - float(cur["all_votes_at"])))))
+        nominator = store.config.roster[cur["nominator"]]["name"]
+        summary = f"3/3 votes in, locked. Result in about {rem}s."
+        keys = _block(f"Finish now: !final (@{nominator})", "More: !gtlist · !gthelp")
+        photos = ""
     else:
-        last_str = f" (last: {cur['name']}, {cur['phase'].upper()})" if cur else ""
-        state_str = f"No active nomination{last_str}"
-        cmds_str = "Commands: !gt Name. Pitch | !!gt Name. Pitch | !gtlist [winners|losers] | !gthelp"
-    store.queue(f"{state_str} · Record: {winners_count} certified, {losers_count} denied · {cmds_str}")
+        summary = _votes_line(len(votes))
+        keys = _block(VOTE_KEYS, "More: !gtlist · !gthelp")
+        photos = "Photos: ready" if cur["ai_invoked"] else f"Photos: send !!gt {cur['name']}"
+    store.queue(_message(
+        _block(f"Now voting: {cur['name']}", summary, *ballot, photos, record),
+        keys,
+    ))
 
 
 def _execute_gtlist(store, request: ActionRequest) -> None:
@@ -620,30 +650,17 @@ def _execute_gtlist(store, request: ActionRequest) -> None:
     cur = store.current()
     if cur and cur["phase"] == "voting":
         votes_in = store.db.execute("SELECT COUNT(*) FROM votes WHERE case_id=?", (cur["id"],)).fetchone()[0]
-        active_str = f"{cur['name']} ({votes_in}/3 votes in)"
+        now_voting = f"Now voting: {cur['name']} ({votes_in}/3 votes in)"
     else:
-        active_str = "none"
+        now_voting = "Now voting: none"
 
     if mode == "winners":
-        winners = [
-            r[0]
-            for r in store.db.execute(
-                "SELECT n.name FROM cases c JOIN nominees n ON n.id=c.nominee_id "
-                "WHERE c.phase='certified' ORDER BY c.id"
-            ).fetchall()
-        ]
-        store.queue(
-            f"Winners ({len(winners)}): {', '.join(winners) if winners else 'none yet'} · "
-            f"Current nominee: {active_str}"
-        )
+        names = [r[0] for r in store.db.execute(
+            "SELECT n.name FROM cases c JOIN nominees n ON n.id=c.nominee_id WHERE c.phase='certified' ORDER BY c.id")]
+        title, mark, other = "Winners", "🏆", "More: !gtlist losers · !gtstatus"
     else:
-        losers = [
-            r[0]
-            for r in store.db.execute(
-                "SELECT n.name FROM denials d JOIN nominees n ON n.id=d.nominee_id ORDER BY d.rowid"
-            ).fetchall()
-        ]
-        store.queue(
-            f"Losers ({len(losers)}): {', '.join(losers) if losers else 'none yet'} · "
-            f"Current nominee: {active_str}"
-        )
+        names = [r[0] for r in store.db.execute(
+            "SELECT n.name FROM denials d JOIN nominees n ON n.id=d.nominee_id ORDER BY d.rowid")]
+        title, mark, other = "Losers", "🚫", "More: !gtlist winners · !gtstatus"
+    entries = [f"{mark} {name}" for name in names] or ["None yet"]
+    store.queue(_message(_block(f"{title} ({len(names)})", *entries), _block(now_voting, other)))
