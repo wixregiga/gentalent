@@ -4,7 +4,7 @@ import fcntl
 from pathlib import Path
 import sqlite3
 import time
-from .net import APIError
+from .net import APIError, plain_text
 
 SEND_FAILURES = ("FAIL_RETRIABLE", "FAIL_PERMANENT")
 
@@ -65,9 +65,9 @@ def new_messages(api, cursor, after):
         cursor = newest
 
 
-def same_text(a, b):
-    """Compare reply text ignoring whitespace; Beeper may normalize line breaks on the way out."""
-    return " ".join((a or "").split()) == " ".join((b or "").split())
+def same_text(stored, sent):
+    """Compare Beeper's stored text with what was sent, as people see it, ignoring whitespace."""
+    return " ".join(plain_text(stored).split()) == " ".join((sent or "").split())
 
 
 def delivery_state(message, pending_id):

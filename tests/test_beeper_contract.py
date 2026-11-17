@@ -10,7 +10,8 @@ import io
 import tempfile
 import unittest
 from gentalent.net import APIError
-from gentalent.runner import delivery_state, flush
+from gentalent.runner import delivery_state, flush, same_text
+from gentalent.workflow import check_keyword
 from gentalent.state import Store
 from support import make_config
 
@@ -62,6 +63,30 @@ class DeliveryStateTest(unittest.TestCase):
 
     def test_pending_ids_without_tilde_work(self):
         self.assertEqual(delivery_state(DELIVERED_TEXT, "m1694783291234567")[0], "sent")
+
+
+# Observed: what was sent for the Jordana Brewster nomination, and what Beeper stored.
+SENT_FORMATTED = ("@gentalent-bot says: @Avery would like to nominate Jordana Brewster as a 2026 "
+                  "Generational Talent Nominee!  \n3/3 YES certifies. Any NO denies forever.  \n"
+                  "1/3 votes are in.\n\nVote: !!Y yes · !!N no · !!C clear  \nRules: !gthelp")
+STORED_FORMATTED = ("<p>@gentalent-bot says: @Avery would like to nominate Jordana Brewster as a 2026 "
+                    "Generational Talent Nominee!<br>3/3 YES certifies. Any NO denies forever.<br>"
+                    "1/3 votes are in.</p>\n<p>Vote: !!Y yes · !!N no · !!C clear<br>Rules: !gthelp</p>")
+
+
+class StoredHtmlTest(unittest.TestCase):
+    def test_formatted_reply_matches_its_stored_html(self):
+        self.assertTrue(same_text(STORED_FORMATTED, SENT_FORMATTED))
+        self.assertTrue(same_text("Tom &amp; Jerry<br>2/3 votes in.", "Tom & Jerry  \n2/3 votes in."))
+
+    def test_different_words_still_differ(self):
+        self.assertFalse(same_text(STORED_FORMATTED.replace("1/3", "2/3"), SENT_FORMATTED))
+
+    def test_stored_bot_reply_is_never_a_command(self):
+        config = make_config(tempfile.mkdtemp())
+        echo = {"id": "x", "chatID": "demo-group", "accountID": "demo-google", "senderID": "alice",
+                "text": "<p>@gentalent-bot says: !gthelp</p>", "timestamp": "2026-11-16T00:00:00Z"}
+        self.assertIsNone(check_keyword(echo, config))
 
 
 class ObservedSendLifecycleTest(unittest.TestCase):

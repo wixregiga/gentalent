@@ -4,6 +4,7 @@ import hashlib
 import re
 from typing import Optional
 from .config import PREFIX
+from .net import plain_text
 
 
 HONORIFIC_PREFIXES = {"dr", "mr", "mrs", "ms", "mx", "prof", "rev", "st", "mt", "capt", "col", "gen", "sgt"}
@@ -164,7 +165,7 @@ def check_keyword(message: dict, config, is_own_outbox: bool = False) -> Optiona
     text = (message.get("text") or "").strip()
     if not text:
         return None
-    if text.casefold().startswith(PREFIX.casefold()):
+    if plain_text(text).strip().casefold().startswith(PREFIX.casefold()):
         return None
 
     timestamp = message.get("timestamp") or ""

@@ -1,11 +1,19 @@
+import html
 import json
 import mimetypes
+import re
 import os
 from pathlib import Path
 import uuid
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, HTTPRedirectHandler, ProxyHandler, build_opener
+
+
+def plain_text(value):
+    """The text people see. Beeper stores sent Markdown as HTML (blocks as <p>, hard breaks
+    as <br>; observed in doc/beeper-api.md item 7), so drop tags and decode entities."""
+    return html.unescape(re.sub(r"<[^>]+>", " ", value or ""))
 
 
 class APIError(Exception):

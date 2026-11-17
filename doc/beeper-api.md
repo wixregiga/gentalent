@@ -48,8 +48,11 @@ Two checks guard these assumptions:
    text. **Not documented:** how a single line break is treated (Markdown would join the
    lines). Replies therefore end each line inside a block with a Markdown hard break (two
    trailing spaces, invisible as plain text), separate blocks with a blank line, and never
-   start a line with Markdown syntax. How the Google Messages bridge renders this has not
-   been observed yet. Text checks ignore whitespace in case Beeper normalizes it.
+   start a line with Markdown syntax.
+   **Observed** (2026-11-16, Jordana Brewster nomination): Beeper stores the result as HTML,
+   blocks as `<p>` and hard breaks as `<br>`, and phones show separate lines. A plain
+   single-line reply is stored unchanged. Text comparisons and the bot's own-message check
+   therefore use the text without tags, with entities decoded.
 8. **Observed.** A reply with a photo arrives as two messages: an `IMAGE` message
    (`attachments[].fileName == "strip.jpg"`, no `text` key), then a separate `TEXT`
    message. The pending ID resolves to the `IMAGE` message.
