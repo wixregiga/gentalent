@@ -4,6 +4,7 @@ go 1.27
 
 require (
 	github.com/beeper/desktop-api-go/v6 v6.0.0
+	golang.org/x/text v0.42.0
 	modernc.org/sqlite v1.61.1
 )
 

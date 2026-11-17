@@ -41,6 +41,10 @@ contexts:
             statement: A Person may only have one open Nomination at a time.
             verified_by:
               - internal/nominations/domain/group_test.go:TestOneOpenNominationPerPerson
+          certified-by-unanimous-yes:
+            statement: A unanimous yes certifies the nominee. Any no denies them.
+            verified_by:
+              - internal/nominations/domain/finalize_test.go:TestCertifiedByUnanimousYes
         assertions:
           open-nominations-within-group-limit:
             on: Nominate
@@ -98,6 +102,45 @@ contexts:
               nominates no one.
             verified_by:
               - internal/nominations/domain/group_test.go:TestMessageNominatesAllOrNone
+          votes-change-until-the-third-vote:
+            on: CastVote
+            statement: >-
+              A Member can vote, change their vote, or clear it, until the third
+              vote is in.
+            verified_by:
+              - internal/nominations/domain/vote_test.go:TestVotesChangeUntilTheThirdVote
+          removed-reaction-clears-only-its-vote:
+            on: CountReactions
+            statement: Removing a reaction clears the vote it cast.
+            verified_by:
+              - internal/nominations/domain/vote_test.go:TestRemovedReactionClearsOnlyItsVote
+          finalized-only-when-all-votes-are-in:
+            on: Finalize
+            statement: >-
+              A Nomination is finalized early only once all three votes are in.
+            verified_by:
+              - internal/nominations/domain/finalize_test.go:TestFinalizedOnlyWhenAllVotesAreIn
+          finalized-early-only-by-nominator:
+            on: Finalize
+            statement: Only the nominator finalizes a Nomination early.
+            verified_by:
+              - internal/nominations/domain/finalize_test.go:TestFinalizedEarlyOnlyByNominator
+          result-posts-after-one-minute:
+            on: FinalizeDue
+            statement: >-
+              Once all three votes are in, the result posts after one minute.
+            verified_by:
+              - internal/nominations/domain/finalize_test.go:TestResultPostsAfterOneMinute
+          ai-runs-at-most-once-per-nominee:
+            on: Nominate
+            statement: AI runs at most once per nominee.
+            verified_by:
+              - internal/nominations/domain/photo_search_test.go:TestAiRunsAtMostOncePerNominee
+          one-shame-given-per-nominee:
+            on: Shame
+            statement: Each Member gives at most one shame per nominee.
+            verified_by:
+              - internal/nominations/domain/shame_test.go:TestOneShameGivenPerNominee
     value_objects:
       CertificationStatus:
         definition: >-
