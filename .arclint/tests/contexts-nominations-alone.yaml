@@ -25,3 +25,7 @@ expect:
   path: internal/nominations/delivery/chat/route.go
   line: 4
   message: import "gentalent/internal/messaging/domain" resolves to Zone(s) ["domain", "messaging"], not in the allow-list of Zone "nominations"
+- kind: violation
+  path: internal/nominations/delivery/chat/route.go
+  line: 5
+  message: import "gentalent/internal/shared/clock" resolves to Zone(s) ["shared"], not in the allow-list of Zone "nominations"

@@ -26,7 +26,7 @@ internal/
     app/command/               find a Person's photos
     port/                      the agent programs and the image tool
     infra/programs/            codex, claude, agy and the image tool
-  shared/                      no product meaning
+  shared/                      no product meaning; imported only by cmd, never by a hexagon
     sqlitedb/                  open (WAL, busy timeout), migrate by PRAGMA user_version, backup
 ```
 
@@ -58,7 +58,10 @@ internal/
    each open announcement.
 
 Two databases, one per stateful hexagon: `nominations.sqlite3` and `messaging.sqlite3`,
-each with its own forward-only migrations tracked by `PRAGMA user_version`. The first
+each with its own forward-only migrations tracked by `PRAGMA user_version`. Each hexagon's
+`infra/sqlite` imports only `database/sql`: it takes the `*sql.DB` that cmd opened and
+exports its migrations as `[]func(context.Context, *sql.Tx) error`, which cmd runs through
+`sqlitedb.Migrate` at startup. The first
 migration of each imports its share of the Python bot's `gentalent.sqlite3` when that file
 exists, reading it only; the Python file itself is never changed.
 
@@ -77,6 +80,8 @@ exists, reading it only; the Python file itself is never changed.
 
 - No comments in Go (`source/no-comments`): names, types and tests carry the meaning.
 - Every interface lives in a `port` package (`ports/interfaces-in-port-zone`).
+- No hexagon imports `internal/shared` (ArcLint's built-in `domain_isolation`); cmd does.
+- Tests of `app/` use fakes of ports; tests that need a real adapter live beside the adapter.
 - Errors are returned, never panicked; only `cmd` exits or prints to stdout.
 - Tests use real adapters where they are cheap (SQLite in a temp dir) and fakes of ports
   in `_test.go` files. A test proves a behavior that would hurt if it broke.

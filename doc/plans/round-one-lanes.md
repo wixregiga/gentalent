@@ -165,8 +165,12 @@ as the Python does, validates the manifest, saves three photos and the stitched 
 ### Databases and migrations
 
 `internal/shared/sqlitedb` opens databases, migrates them by `PRAGMA user_version` and takes
-online backups. `nominations.sqlite3` and `messaging.sqlite3` each have their own numbered
-migrations in their hexagon's `infra/sqlite`. Migration 1 of each creates its schema and,
+online backups; only cmd imports it (no hexagon may import `internal/shared`). Each
+hexagon's `infra/sqlite` imports `database/sql` only: its store takes a `*sql.DB` (cmd opens a
+read-write one and, for the read side, a read-only one), and it exports
+`Migrations(pythonDatabase string) []func(context.Context, *sql.Tx) error`, which cmd runs
+through `sqlitedb.Migrate`. `nominations.sqlite3` and `messaging.sqlite3` each have their own
+numbered migrations. Migration 1 of each creates its schema and,
 when the Python bot's database exists (config `database`), imports that hexagon's share of
 its history from it, opened read-only, inside the same transaction. A rehearsal test runs the
 import against a database built by the Python bot's own `SCHEMA` with every table filled.

@@ -6,10 +6,7 @@ import (
 	"fmt"
 )
 
-type Migration struct {
-	Name string
-	Up   func(ctx context.Context, tx *sql.Tx) error
-}
+type Migration = func(ctx context.Context, tx *sql.Tx) error
 
 func Version(ctx context.Context, db *sql.DB) (int, error) {
 	var version int
@@ -26,17 +23,24 @@ func Migrate(ctx context.Context, db *sql.DB, migrations []Migration) error {
 		return fmt.Errorf("database schema version %d is newer than this build knows (%d)", version, len(migrations))
 	}
 	for i := version; i < len(migrations); i++ {
-		migration := migrations[i]
-		err := InTx(ctx, db, func(tx *sql.Tx) error {
-			if err := migration.Up(ctx, tx); err != nil {
-				return err
-			}
-			_, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1))
-			return err
-		})
-		if err != nil {
-			return fmt.Errorf("migration %d (%s): %w", i+1, migration.Name, err)
+		if err := apply(ctx, db, i+1, migrations[i]); err != nil {
+			return fmt.Errorf("migration %d: %w", i+1, err)
 		}
 	}
 	return nil
+}
+
+func apply(ctx context.Context, db *sql.DB, version int, migration Migration) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := migration(ctx, tx); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", version)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

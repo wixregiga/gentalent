@@ -42,15 +42,3 @@ func Open(ctx context.Context, path string, access Access) (*sql.DB, error) {
 	}
 	return db, nil
 }
-
-func InTx(ctx context.Context, db *sql.DB, work func(*sql.Tx) error) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := work(tx); err != nil {
-		tx.Rollback()
-		return err
-	}
-	return tx.Commit()
-}

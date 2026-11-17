@@ -31,15 +31,15 @@ func TestMigrateAppliesEachMigrationOnceInOrder(t *testing.T) {
 	ctx := context.Background()
 	db, _ := openTemp(t)
 	migrations := []Migration{
-		{Name: "create", Up: exec("CREATE TABLE seen(step INTEGER)")},
-		{Name: "first row", Up: exec("INSERT INTO seen VALUES (1)")},
+		exec("CREATE TABLE seen(step INTEGER)"),
+		exec("INSERT INTO seen VALUES (1)"),
 	}
 	for range 2 {
 		if err := Migrate(ctx, db, migrations); err != nil {
 			t.Fatal(err)
 		}
 	}
-	migrations = append(migrations, Migration{Name: "second row", Up: exec("INSERT INTO seen VALUES (2)")})
+	migrations = append(migrations, exec("INSERT INTO seen VALUES (2)"))
 	if err := Migrate(ctx, db, migrations); err != nil {
 		t.Fatal(err)
 	}
@@ -55,17 +55,17 @@ func TestFailedMigrationLeavesNoTrace(t *testing.T) {
 	ctx := context.Background()
 	db, _ := openTemp(t)
 	failing := []Migration{
-		{Name: "create", Up: exec("CREATE TABLE kept(x)")},
-		{Name: "half done", Up: func(ctx context.Context, tx *sql.Tx) error {
+		exec("CREATE TABLE kept(x)"),
+		func(ctx context.Context, tx *sql.Tx) error {
 			if _, err := tx.ExecContext(ctx, "CREATE TABLE half(x)"); err != nil {
 				return err
 			}
 			return errors.New("refused")
-		}},
+		},
 	}
 	err := Migrate(ctx, db, failing)
-	if err == nil || !strings.Contains(err.Error(), "migration 2 (half done)") {
-		t.Fatalf("err = %v, want migration 2 named", err)
+	if err == nil || !strings.Contains(err.Error(), "migration 2: refused") {
+		t.Fatalf("err = %v, want migration 2 and its error named", err)
 	}
 	version, _ := Version(ctx, db)
 	var half int
@@ -79,7 +79,7 @@ func TestMigrateRefusesADatabaseNewerThanTheBuild(t *testing.T) {
 	ctx := context.Background()
 	db, _ := openTemp(t)
 	db.Exec("PRAGMA user_version = 5")
-	if err := Migrate(ctx, db, []Migration{{Name: "one", Up: exec("SELECT 1")}}); err == nil {
+	if err := Migrate(ctx, db, []Migration{exec("SELECT 1")}); err == nil {
 		t.Fatal("migrated a database newer than the build")
 	}
 }

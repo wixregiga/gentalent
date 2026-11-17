@@ -4,7 +4,8 @@
 # Group's conversation on whatever platform, internal/ai runs AI agents for the
 # Group. internal/shared has no product meaning. Inside each hexagon: domain,
 # app (commands and queries), port (every interface), infra (driven adapters),
-# delivery (driving adapters). doc/architecture.md is the map.
+# delivery (driving adapters). Context code never imports internal/shared;
+# only cmd does. doc/architecture.md is the map.
 # Ask before editing: arclint context <path> · arclint rules [selector]
 
 runtime: [go]
@@ -71,31 +72,31 @@ rules:
     acyclic: [composition, driving, driven, application, domain, shared]
 
   contexts/nominations-alone:
-    rationale: "The nomination process imports no other hexagon. What it needs from outside is a port that cmd satisfies."
+    rationale: "The nomination process imports no other hexagon and no code outside every context (ArcLint's built-in domain_isolation says the same of internal/shared). What it needs from outside is a port that cmd satisfies."
     on: nominations
     exclude:
       paths: ["**/*_test.go"]
       reason: "Tests wire fakes across zones."
     imports:
-      internal: [shared]
+      internal: []
 
   contexts/messaging-alone:
-    rationale: "Messaging imports no other hexagon; it moves messages and knows no command, vote or photo."
+    rationale: "Messaging imports no other hexagon and no code outside every context; it moves messages and knows no command, vote or photo."
     on: messaging
     exclude:
       paths: ["**/*_test.go"]
       reason: "Tests wire fakes across zones."
     imports:
-      internal: [shared]
+      internal: []
 
   contexts/ai-alone:
-    rationale: "AI imports no other hexagon; it is given a subject and returns what it found."
+    rationale: "AI imports no other hexagon and no code outside every context; it is given a subject and returns what it found."
     on: ai
     exclude:
       paths: ["**/*_test.go"]
       reason: "Tests wire fakes across zones."
     imports:
-      internal: [shared]
+      internal: []
 
   domain/standard-library-only:
     rationale: "The model imports the Go standard library and nothing else, internal/shared included; ArcLint's built-in domain_isolation rule refuses a model that imports shared code."
