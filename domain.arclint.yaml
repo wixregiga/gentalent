@@ -1,0 +1,106 @@
+# yaml-language-server: $schema=.arclint/schemas/domain.arclint.schema.json
+version: 1
+project: GenTalent
+contexts:
+  nominations:
+    definition: >-
+      The nomination process: Members nominate a Person, the Group votes on each
+      Nomination, and finalizing it certifies or rejects the Person as a
+      Generational Talent.
+    aggregates:
+      Group:
+        definition: The Members and their shared chat space.
+        identity: GroupID
+        entities:
+          Nomination:
+            definition: >-
+              One Member's proposal that a Person be certified a Generational
+              Talent. A Renomination is a Nomination of a Person who was
+              rejected as a Generational Talent before.
+            identity: NominationNumber
+          Member:
+            definition: One of the three people in the Group.
+            identity: MemberID
+          Person:
+            definition: >-
+              Someone who has been nominated at least once by a Member to be a
+              Generational Talent. A Person can be rejected or certified through
+              the nomination process.
+            identity: PersonID
+          Shame:
+            definition: >-
+              A message to a Member of the Group that calls them out over a
+              Person or a Nomination, which it refers to by its identity.
+            identity: ShameID
+        invariants:
+          nomination-limit-not-less-than-one: Every nomination limit a Group sets is at least one.
+          one-open-nomination-per-person: A Person may only have one open Nomination at a time.
+        assertions:
+          open-nominations-within-group-limit:
+            on: Nominate
+            statement: >-
+              A Member nominates a person only while the Group has fewer open
+              Nominations than its open nomination limit.
+          open-nominations-within-member-limit:
+            on: Nominate
+            statement: >-
+              A Member nominates a person only while that Member has fewer open
+              Nominations than the member open nomination limit.
+          nominations-per-message-within-limit:
+            on: Nominate
+            statement: >-
+              One message nominates no more people than the single message
+              nomination limit.
+          vote-names-its-nomination:
+            on: CastVote
+            statement: >-
+              A Member's vote names its Nomination whenever more than one
+              Nomination is open.
+          renominated-only-through-renomination:
+            on: Nominate
+            statement: >-
+              A Person may only be renominated through the renomination process.
+          renominated-only-when-rejected:
+            on: Renominate
+            statement: >-
+              A Person may only be renominated if their certification status has
+              been rejected.
+          renominated-only-when-group-allows:
+            on: Renominate
+            statement: >-
+              A Person may only be renominated if the Group allows renomination.
+          message-nominates-all-or-none:
+            on: Nominate
+            statement: >-
+              A message that nominates more people than the limits have room for
+              nominates no one.
+    value_objects:
+      CertificationStatus:
+        definition: >-
+          Where a Person stands in the nomination process: nominated, certified,
+          or rejected.
+    specifications:
+      GenerationalTalent:
+        definition: >-
+          A Person who has been certified through the nomination process.
+  messaging:
+    definition: >-
+      The Group's conversation, whatever platform carries it: the messages,
+      replies and reactions Members send and the messages GenTalent sends back.
+  ai:
+    definition: >-
+      AI agents that do work for the Group, now finding a Person's photos,
+      within limits.
+relations:
+  - from: messaging
+    to: nominations
+    kind: customer_supplier
+    description: >-
+      Messaging delivers Members' messages, replies and reactions in its own
+      platform-free terms and sends the nomination process's replies; Beeper and
+      bbctl are adapters inside messaging.
+  - from: ai
+    to: nominations
+    kind: customer_supplier
+    description: >-
+      AI finds a Person's photos when the nomination process asks for them.

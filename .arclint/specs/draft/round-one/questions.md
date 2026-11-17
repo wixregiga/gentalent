@@ -268,3 +268,12 @@ On ai: i already said yes, fuck
 On messaging: come the hell on I said y es
 On renaming to nominations: llord approved
 On the context review: do that and then orchestrate and coordinate-verified in a new thread. You can start a new t3 orchestrator thread with the directions and the things that you learned from this one or you can do it yourself with subagents. I don't care i am just tired and need to see progress.
+
+## Round 8 (verbatim, during orchestration)
+"hey, let's make sure we don't  overtake the python process until we have completed the golang features. I don't want it to stop working while we are h ere"
+
+## Orchestrator decisions
+Made under the owner's round 7 delegation ("you have decision authority from here on as long as you adhere to what i have already agreed to"). Each names its reason.
+
+- **D1 Promotion.** The root `domain.arclint.yaml` was created from this spec's copy with `arclint domain define`, entry for entry; a normalized comparison of the two files shows no difference. Reason: grill-domain section 3 step 1; Base is none, so every entry is an addition and no entry changed on both sides.
+- **D2 Python keeps running until Go is complete.** The Python package, its tests and the Python run and deploy path stay working on this branch. Go is added beside it; `mise run test` and the deploy check run both suites. The switch of `scripts/run-gentalent-live.sh` to the Go binary is one separate, final commit made only once the Go suite covers every inventoried behavior, and the Python package is removed only after that. Reason: Round 8.
