@@ -31,7 +31,7 @@ func (g *Group) Shame(shame Shame, about Ref) (Shame, error) {
 	if err := next.requireMember(shame.By); err != nil {
 		return Shame{}, err
 	}
-	if _, ok := next.Member(shame.Target); !ok {
+	if !next.isMember(shame.Target) {
 		return Shame{}, Refusal{Rule: ShameOnlyMembers}
 	}
 	if shame.Target == shame.By {

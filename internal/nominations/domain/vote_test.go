@@ -9,7 +9,7 @@ import (
 
 var oneAtATime = domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}
 
-func vote(t *testing.T, group *domain.Group, member domain.Member, choice domain.Vote) []domain.VoteOutcome {
+func vote(t *testing.T, group *domain.Group, member member, choice domain.Vote) []domain.VoteOutcome {
 	t.Helper()
 	outcomes, err := group.CastVote(member.ID, []domain.Ballot{{Vote: choice}}, today)
 	if err != nil {

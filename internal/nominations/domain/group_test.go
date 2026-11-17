@@ -10,11 +10,17 @@ import (
 	"gentalent/internal/nominations/domain"
 )
 
+type member struct {
+	ID   domain.MemberID
+	Name string
+}
+
 var (
-	alex    = domain.Member{ID: "member-alex", Name: "Alex"}
-	blair   = domain.Member{ID: "member-blair", Name: "Blair"}
-	casey   = domain.Member{ID: "member-casey", Name: "Casey"}
-	members = []domain.Member{alex, blair, casey}
+	alex      = member{ID: "member-alex", Name: "Alex"}
+	blair     = member{ID: "member-blair", Name: "Blair"}
+	casey     = member{ID: "member-casey", Name: "Casey"}
+	members   = []member{alex, blair, casey}
+	memberIDs = []domain.MemberID{alex.ID, blair.ID, casey.ID}
 
 	ada       = domain.Person{ID: "adalovelace", Name: "Ada Lovelace"}
 	grace     = domain.Person{ID: "gracehopper", Name: "Grace Hopper"}
@@ -27,14 +33,14 @@ var (
 
 func newGroup(t *testing.T, settings domain.Settings, history ...domain.Nomination) *domain.Group {
 	t.Helper()
-	group, err := domain.NewGroup("group-test", members, settings, history, nil)
+	group, err := domain.NewGroup("group-test", memberIDs, settings, history, nil)
 	if err != nil {
 		t.Fatalf("NewGroup: %v", err)
 	}
 	return group
 }
 
-func open(number domain.NominationNumber, person domain.Person, nominator domain.Member) domain.Nomination {
+func open(number domain.NominationNumber, person domain.Person, nominator member) domain.Nomination {
 	return domain.Nomination{
 		Number:      number,
 		Person:      person,
@@ -115,7 +121,7 @@ func nomination(t *testing.T, group *domain.Group, number domain.NominationNumbe
 
 func TestNominationLimitNotLessThanOne(t *testing.T) {
 	valid := domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 1}
-	if _, err := domain.NewGroup("group-test", members, valid, nil, nil); err != nil {
+	if _, err := domain.NewGroup("group-test", memberIDs, valid, nil, nil); err != nil {
 		t.Fatalf("limits of one must be accepted: %v", err)
 	}
 	cases := []struct {
@@ -132,7 +138,7 @@ func TestNominationLimitNotLessThanOne(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			settings := valid
 			c.change(&settings)
-			group, err := domain.NewGroup("group-test", members, settings, []domain.Nomination{open(1, ada, alex)}, nil)
+			group, err := domain.NewGroup("group-test", memberIDs, settings, []domain.Nomination{open(1, ada, alex)}, nil)
 			var below domain.LimitBelowOne
 			if !errors.As(err, &below) {
 				t.Fatalf("want LimitBelowOne, got group %v and error %v", group, err)
@@ -161,7 +167,7 @@ func TestOneOpenNominationPerPerson(t *testing.T) {
 	}
 	wantUnchanged(t, group, before)
 
-	_, err = domain.NewGroup("group-test", members, settings, []domain.Nomination{open(1, ada, alex), open(2, ada, blair)}, nil)
+	_, err = domain.NewGroup("group-test", memberIDs, settings, []domain.Nomination{open(1, ada, alex), open(2, ada, blair)}, nil)
 	refused = refusal(t, err, domain.OneOpenNominationPerPerson)
 	wantNumbers(t, refused.Numbers, 1, 2)
 }

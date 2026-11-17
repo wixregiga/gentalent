@@ -2,7 +2,10 @@ module gentalent
 
 go 1.27
 
-require modernc.org/sqlite v1.61.1
+require (
+	golang.org/x/text v0.42.0
+	modernc.org/sqlite v1.61.1
+)
 
 require (
 	github.com/dustin/go-humanize v1.1.0 // indirect

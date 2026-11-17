@@ -16,10 +16,10 @@ type Group struct {
 	shames      []Shame
 }
 
-func NewGroup(id GroupID, members []Member, settings Settings, nominations []Nomination, shames []Shame) (*Group, error) {
+func NewGroup(id GroupID, members []MemberID, settings Settings, nominations []Nomination, shames []Shame) (*Group, error) {
 	group := &Group{
 		id:          id,
-		members:     slices.Clone(members),
+		members:     roster(members),
 		settings:    settings,
 		nominations: cloneAll(nominations),
 		shames:      slices.Clone(shames),
@@ -43,17 +43,12 @@ func (g *Group) Shames() []Shame {
 	return slices.Clone(g.shames)
 }
 
-func (g *Group) Members() []Member {
-	return slices.Clone(g.members)
-}
-
-func (g *Group) Member(id MemberID) (Member, bool) {
-	for _, member := range g.members {
-		if member.ID == id {
-			return member, true
-		}
+func roster(ids []MemberID) []Member {
+	members := make([]Member, len(ids))
+	for i, id := range ids {
+		members[i] = Member{ID: id}
 	}
-	return Member{}, false
+	return members
 }
 
 func (g *Group) Nomination(number NominationNumber) (Nomination, bool) {
@@ -125,10 +120,14 @@ func (g *Group) clone() *Group {
 }
 
 func (g *Group) requireMember(id MemberID) error {
-	if _, ok := g.Member(id); !ok {
+	if !g.isMember(id) {
 		return fmt.Errorf("%s is not a Member of the Group", id)
 	}
 	return nil
+}
+
+func (g *Group) isMember(id MemberID) bool {
+	return slices.ContainsFunc(g.members, func(member Member) bool { return member.ID == id })
 }
 
 func (g *Group) index(number NominationNumber) (int, bool) {

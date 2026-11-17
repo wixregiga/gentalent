@@ -7,7 +7,7 @@ import (
 	"gentalent/internal/nominations/domain"
 )
 
-func locked(number domain.NominationNumber, person domain.Person, nominator domain.Member, last domain.Vote, at time.Time) domain.Nomination {
+func locked(number domain.NominationNumber, person domain.Person, nominator member, last domain.Vote, at time.Time) domain.Nomination {
 	nomination := open(number, person, nominator)
 	for _, member := range members {
 		nomination.Votes[member.ID] = domain.Yes
@@ -34,7 +34,7 @@ func TestCertifiedByUnanimousYes(t *testing.T) {
 
 	forged := finalized[1]
 	forged.Status = domain.Certified
-	_, err = domain.NewGroup("group-test", members, severalAtOnce, []domain.Nomination{forged}, nil)
+	_, err = domain.NewGroup("group-test", memberIDs, severalAtOnce, []domain.Nomination{forged}, nil)
 	refused := refusal(t, err, domain.CertifiedByUnanimousYes)
 	wantNumbers(t, refused.Numbers, 2)
 }

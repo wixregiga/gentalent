@@ -6,7 +6,7 @@ import (
 	"gentalent/internal/nominations/domain"
 )
 
-func shame(by, target domain.Member) domain.Shame {
+func shame(by, target member) domain.Shame {
 	return domain.Shame{
 		By:        by.ID,
 		Target:    target.ID,
@@ -63,7 +63,7 @@ func TestShameRefusals(t *testing.T) {
 		about   domain.Ref
 		rule    domain.Rule
 	}{
-		{"B97 a target outside the Group", []domain.Nomination{open(1, ada, alex)}, shame(blair, domain.Member{ID: "stranger"}), domain.Ref{}, domain.ShameOnlyMembers},
+		{"B97 a target outside the Group", []domain.Nomination{open(1, ada, alex)}, shame(blair, member{ID: "stranger"}), domain.Ref{}, domain.ShameOnlyMembers},
 		{"B98 shaming yourself", []domain.Nomination{open(1, ada, alex)}, shame(blair, blair), domain.Ref{}, domain.NoSelfShame},
 		{"B101 nothing nominated yet", nil, shame(blair, casey), domain.Ref{}, domain.NothingToShame},
 		{"Q15 several open and none named", []domain.Nomination{open(1, ada, alex), open(2, grace, blair)}, shame(blair, casey), domain.Ref{}, domain.ShameNamesItsNomination},
