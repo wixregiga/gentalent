@@ -104,7 +104,7 @@ type PhotoResult struct {
 |---|---|
 | `Handle(ctx, Message) error` | Applies one Member message: command or query; a message ID already handled does nothing. Its replies commit with it. |
 | `FinalizeDue(ctx, now) error` | Finalizes every locked Nomination whose minute is up; one batched verdict, then strips, in number order. |
-| `CountReactions(ctx, nomination int, byMember map[string]string) error` | The reaction keys each Member has on that Nomination's announcement now; changes votes as the reactions say. |
+| `CountReactions(ctx, nomination int, byMember map[string][]string) error` | Every reaction key each Member has on that Nomination's announcement now (a Member with both a yes and a no counts as none, B67); changes votes as the reactions say. |
 | `OpenAnnouncements(ctx) ([]int, error)` | Nominations whose announcement reactions count right now. |
 | `ClaimPhotoSearches(ctx) ([]PhotoSearch, error)` | Requested searches not yet started, marked started in the same transaction (at most once per Nomination). |
 | `AttachPhotos(ctx, PhotoResult) error` | A finished or failed search; its replies commit with it. |
@@ -150,7 +150,7 @@ type Outgoing struct {
 | Handled(id) | Marks one handled. |
 | Enqueue([]Outgoing) | Idempotent by `Key`; a known key is ignored. |
 | Flush | Sends queued replies exactly once and tracks each (sent, uncertain, failed) as `doc/beeper-api.md` says. |
-| Reactions(tag) | Reaction keys by Member sender ID on the sent message tagged `tag`. |
+| Reactions(tag) | Every reaction key by Member sender ID (`map[string][]string`, never collapsed to one per sender) on the sent message tagged `tag`. |
 | Arm, ResolveSend, UncertainReplies, doctor checks, discovery | As the Python CLI does today. |
 
 cmd tags an announcement reply `announces/<n>`.
