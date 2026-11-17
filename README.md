@@ -31,8 +31,10 @@ messages, are ignored, as are the bot's own replies.
 - `stitched`: one stitched image attached to the nomination, nothing on the verdict.
 
 The AI search is the same either way; it always saves three photos and the stitched strip.
-Changing the setting needs a restart (`mise daemons restart gentalent`), not a deploy.
-Restart when no `!!gt` photo search is running, or that search starts over.
+Changing the setting needs a restart, not a deploy:
+`mise daemons stop gentalent && mise daemons start gentalent`. (`mise daemons restart`
+also restarts the Beeper app.) Restart when no `!!gt` photo search is running, or that
+search starts over.
 
 ## How it runs
 

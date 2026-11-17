@@ -98,9 +98,12 @@ pin() {
 }
 
 restart() {
-  # A crashing start can make this exit non-zero or retry indefinitely; the steady check
-  # below decides, so neither may skip the rollback.
-  timeout 120 mise daemons restart gentalent || true
+  # Not `mise daemons restart`: that is pitchfork's `start --force`, which also force-restarts
+  # dependencies, and it restarted the Beeper app on the first deploy. A plain start leaves an
+  # already-running Beeper alone. A crashing start can exit non-zero or retry indefinitely;
+  # the steady check below decides, so neither may skip the rollback.
+  timeout 60 mise daemons stop gentalent || true
+  timeout 120 mise daemons start gentalent || true
 }
 
 steady_pid() {
