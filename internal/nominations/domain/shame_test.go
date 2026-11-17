@@ -18,7 +18,7 @@ func shame(by, target member) domain.Shame {
 	}
 }
 
-func TestOneShameGivenPerNominee(t *testing.T) {
+func TestOneShamePerMemberPerNomination(t *testing.T) {
 	group := newGroup(t, severalAtOnce, finalized(1, ada, domain.Rejected), open(2, grace, alex))
 
 	given, err := group.Shame(shame(blair, casey), domain.Ref{Number: 1})
@@ -30,7 +30,7 @@ func TestOneShameGivenPerNominee(t *testing.T) {
 	}
 	before := snapshot(group)
 	_, err = group.Shame(shame(blair, alex), domain.Ref{Person: ada.ID})
-	refused := refusal(t, err, domain.OneShameGivenPerNominee)
+	refused := refusal(t, err, domain.OneShamePerMemberPerNomination)
 	wantNumbers(t, refused.Numbers, 1)
 	wantUnchanged(t, group, before)
 

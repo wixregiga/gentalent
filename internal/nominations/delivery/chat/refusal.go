@@ -44,7 +44,7 @@ func (w wording) refusal(r domain.Refusal) (string, bool) {
 		return "Already a Generational Talent: " + w.name(first) + ".", true
 	case domain.RenominatedOnlyWhenGroupAllows:
 		return "Renomination is turned off for this Group.", true
-	case domain.AiRunsAtMostOncePerNominee:
+	case domain.PhotosSearchedAtMostOncePerNomination:
 		nomination := w.nomination(first)
 		return fmt.Sprintf("Photos were already requested for %s (%d/%d votes in). Respond with !!Y or !!N.", w.name(first), len(nomination.Votes), members), true
 	case domain.VoteNamesItsNomination:
@@ -58,7 +58,7 @@ func (w wording) refusal(r domain.Refusal) (string, bool) {
 	case domain.FinalizedEarlyOnlyByNominator:
 		nominator := w.nomination(first).Nominator
 		return fmt.Sprintf("Only %s (the initial nominator) can finalize %s early with !final.", w.member(nominator), w.name(first)), true
-	case domain.OneShameGivenPerNominee:
+	case domain.OneShamePerMemberPerNomination:
 		return "You already used your shame for " + w.name(first) + ".", true
 	case domain.ShameNamesItsNomination:
 		return lines(append([]string{fmt.Sprintf("Several Nominations are open. Name one, e.g. !gtshame @Name %d reason", first)}, w.listed(r.Numbers)...)...), true

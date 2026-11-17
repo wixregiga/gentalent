@@ -40,7 +40,7 @@ func (g *Group) Nominate(by MemberID, candidates []Candidate, at time.Time) ([]N
 		if !candidate.WithPhotos {
 			return nil, Refusal{Rule: OneOpenNominationPerPerson, Numbers: []NominationNumber{existing.Number}}
 		}
-		if err := next.AssertAiRunsAtMostOncePerNominee(*existing); err != nil {
+		if err := next.AssertPhotosSearchedAtMostOncePerNomination(*existing); err != nil {
 			return nil, err
 		}
 		if existing.Locked() {
@@ -172,9 +172,9 @@ func (g *Group) AssertMessageNominatesAllOrNone(member MemberID, count int) erro
 	return nil
 }
 
-func (g *Group) AssertAiRunsAtMostOncePerNominee(nomination Nomination) error {
+func (g *Group) AssertPhotosSearchedAtMostOncePerNomination(nomination Nomination) error {
 	if nomination.Photos != NoPhotos {
-		return Refusal{Rule: AiRunsAtMostOncePerNominee, Numbers: []NominationNumber{nomination.Number}}
+		return Refusal{Rule: PhotosSearchedAtMostOncePerNomination, Numbers: []NominationNumber{nomination.Number}}
 	}
 	return nil
 }

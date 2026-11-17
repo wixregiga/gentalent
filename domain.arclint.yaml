@@ -42,7 +42,7 @@ contexts:
             verified_by:
               - internal/nominations/domain/group_test.go:TestOneOpenNominationPerPerson
           certified-by-unanimous-yes:
-            statement: A unanimous yes certifies the nominee. Any no denies them.
+            statement: A finalized Nomination certifies its Person only when every Member voted yes; any no rejects them.
             verified_by:
               - internal/nominations/domain/finalize_test.go:TestCertifiedByUnanimousYes
         assertions:
@@ -125,22 +125,23 @@ contexts:
             statement: Only the nominator finalizes a Nomination early.
             verified_by:
               - internal/nominations/domain/finalize_test.go:TestFinalizedEarlyOnlyByNominator
-          result-posts-after-one-minute:
+          finalized-a-minute-after-the-last-vote:
             on: FinalizeDue
             statement: >-
-              Once all three votes are in, the result posts after one minute.
+              A Nomination with every vote in is finalized one minute after its
+              last vote unless its nominator finalizes it first.
             verified_by:
-              - internal/nominations/domain/finalize_test.go:TestResultPostsAfterOneMinute
-          ai-runs-at-most-once-per-nominee:
+              - internal/nominations/domain/finalize_test.go:TestFinalizedAMinuteAfterTheLastVote
+          photos-searched-at-most-once-per-nomination:
             on: Nominate
-            statement: AI runs at most once per nominee.
+            statement: A Nomination's photos are searched for at most once.
             verified_by:
-              - internal/nominations/domain/photo_search_test.go:TestAiRunsAtMostOncePerNominee
-          one-shame-given-per-nominee:
+              - internal/nominations/domain/photo_search_test.go:TestPhotosSearchedAtMostOncePerNomination
+          one-shame-per-member-per-nomination:
             on: Shame
-            statement: Each Member gives at most one shame per nominee.
+            statement: Each Member gives at most one Shame per Nomination.
             verified_by:
-              - internal/nominations/domain/shame_test.go:TestOneShameGivenPerNominee
+              - internal/nominations/domain/shame_test.go:TestOneShamePerMemberPerNomination
     value_objects:
       CertificationStatus:
         definition: >-

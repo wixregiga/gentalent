@@ -94,7 +94,7 @@ func TestFinalizeNamingSeveralFinalizesAllOrNone(t *testing.T) {
 	}
 }
 
-func TestResultPostsAfterOneMinute(t *testing.T) {
+func TestFinalizedAMinuteAfterTheLastVote(t *testing.T) {
 	group := newGroup(t, severalAtOnce, locked(1, ada, alex, domain.Yes, today), locked(2, grace, blair, domain.No, today.Add(30*time.Second)), open(3, katherine, casey))
 
 	if got, err := group.FinalizeDue(today.Add(59 * time.Second)); err != nil || len(got) != 0 {

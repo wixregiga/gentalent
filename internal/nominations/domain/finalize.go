@@ -35,7 +35,7 @@ func (g *Group) FinalizeDue(now time.Time) ([]Nomination, error) {
 	next := g.clone()
 	var due []Nomination
 	for _, nomination := range next.open() {
-		if nomination.Locked() && next.AssertResultPostsAfterOneMinute(nomination, now) == nil {
+		if nomination.Locked() && next.AssertFinalizedAMinuteAfterTheLastVote(nomination, now) == nil {
 			due = append(due, nomination)
 		}
 	}
@@ -73,9 +73,9 @@ func (g *Group) AssertFinalizedEarlyOnlyByNominator(member MemberID, nominations
 	return nil
 }
 
-func (g *Group) AssertResultPostsAfterOneMinute(nomination Nomination, now time.Time) error {
+func (g *Group) AssertFinalizedAMinuteAfterTheLastVote(nomination Nomination, now time.Time) error {
 	if !nomination.Locked() || now.Sub(nomination.LockedAt) < ResultDelay {
-		return Refusal{Rule: ResultPostsAfterOneMinute, Numbers: []NominationNumber{nomination.Number}}
+		return Refusal{Rule: FinalizedAMinuteAfterTheLastVote, Numbers: []NominationNumber{nomination.Number}}
 	}
 	return nil
 }

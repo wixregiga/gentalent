@@ -42,7 +42,7 @@ func (g *Group) Shame(shame Shame, about Ref) (Shame, error) {
 		return Shame{}, err
 	}
 	nomination := next.nominations[i]
-	if err := next.AssertOneShameGivenPerNominee(shame.By, nomination); err != nil {
+	if err := next.AssertOneShamePerMemberPerNomination(shame.By, nomination); err != nil {
 		return Shame{}, err
 	}
 	shame.ID = next.nextShameID()
@@ -56,10 +56,10 @@ func (g *Group) Shame(shame Shame, about Ref) (Shame, error) {
 	return shame, nil
 }
 
-func (g *Group) AssertOneShameGivenPerNominee(member MemberID, nomination Nomination) error {
+func (g *Group) AssertOneShamePerMemberPerNomination(member MemberID, nomination Nomination) error {
 	for _, given := range g.shames {
 		if given.By == member && given.Nomination == nomination.Number {
-			return Refusal{Rule: OneShameGivenPerNominee, Numbers: []NominationNumber{nomination.Number}}
+			return Refusal{Rule: OneShamePerMemberPerNomination, Numbers: []NominationNumber{nomination.Number}}
 		}
 	}
 	return nil

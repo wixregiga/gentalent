@@ -10,7 +10,7 @@ func withPhotos(person domain.Person) []domain.Candidate {
 	return []domain.Candidate{{Person: person.ID, Name: person.Name, Pitch: "A pitch for " + person.Name, WithPhotos: true}}
 }
 
-func TestAiRunsAtMostOncePerNominee(t *testing.T) {
+func TestPhotosSearchedAtMostOncePerNomination(t *testing.T) {
 	group := newGroup(t, oneAtATime, open(1, ada, alex))
 
 	outcome, err := group.Nominate(blair.ID, withPhotos(ada), today)
@@ -22,7 +22,7 @@ func TestAiRunsAtMostOncePerNominee(t *testing.T) {
 	}
 	before := snapshot(group)
 	_, err = group.Nominate(blair.ID, withPhotos(ada), today)
-	refused := refusal(t, err, domain.AiRunsAtMostOncePerNominee)
+	refused := refusal(t, err, domain.PhotosSearchedAtMostOncePerNomination)
 	wantNumbers(t, refused.Numbers, 1)
 	wantUnchanged(t, group, before)
 
@@ -37,7 +37,7 @@ func TestAiRunsAtMostOncePerNominee(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = group.Nominate(blair.ID, withPhotos(ada), today)
-	refusal(t, err, domain.AiRunsAtMostOncePerNominee)
+	refusal(t, err, domain.PhotosSearchedAtMostOncePerNomination)
 }
 
 func TestPhotosForALockedNominationAreRefused(t *testing.T) {
