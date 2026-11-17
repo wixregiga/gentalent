@@ -25,6 +25,7 @@
   "poll_seconds": 3,
   "media_dir": ".state/media",
   "photo_layout": "individual",
+  "announce_reaction_votes": false,
   "ai_providers": [
     {"cli": "codex", "model": "gpt-6.1-sol"},
     {"cli": "claude", "model": "sonnet"},

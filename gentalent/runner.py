@@ -5,6 +5,7 @@ from pathlib import Path
 import sqlite3
 import time
 from .net import APIError, plain_text
+from . import reactions
 from .shame import wants_reply_context
 
 SEND_FAILURES = ("FAIL_RETRIABLE", "FAIL_PERMANENT")
@@ -143,6 +144,7 @@ def poll_once(store, api, live=False):
             store.handle(with_reply_context(api, message))
         with store.db:
             store.set("cursor", cursor or "")
+    reactions.sync(store, api)
     store.finalize_due()
     flush(store, api, live)
 

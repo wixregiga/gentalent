@@ -45,6 +45,9 @@ CREATE TABLE IF NOT EXISTS shames(
   UNIQUE(case_id, shamer_id));
 CREATE TRIGGER IF NOT EXISTS keep_shames_delete BEFORE DELETE ON shames BEGIN SELECT RAISE(ABORT,'Shames are permanent'); END;
 CREATE TRIGGER IF NOT EXISTS keep_shames_update BEFORE UPDATE ON shames BEGIN SELECT RAISE(ABORT,'Shames are permanent'); END;
+CREATE TABLE IF NOT EXISTS reaction_votes(
+  case_id INTEGER NOT NULL REFERENCES cases(id), member_id TEXT NOT NULL, vote TEXT,
+  PRIMARY KEY(case_id, member_id));
 CREATE TABLE IF NOT EXISTS feedback(
   id INTEGER PRIMARY KEY, message_id TEXT NOT NULL UNIQUE, sender_id TEXT NOT NULL,
   kind TEXT NOT NULL, text TEXT NOT NULL, said_at TEXT NOT NULL);

@@ -32,6 +32,14 @@ class Config:
         return value
 
     @property
+    def announce_reaction_votes(self):
+        """Post a reply for 👍/👎 votes like typed votes get. Off by default: silent."""
+        value = self.data.get("announce_reaction_votes", False)
+        if not isinstance(value, bool):
+            raise ValueError("announce_reaction_votes must be true or false.")
+        return value
+
+    @property
     def roster(self):
         return {m["id"]: m for m in self.data["members"]}
 
@@ -56,6 +64,7 @@ class Config:
         if any(m.get("platform") not in ("android", "iphone", "unknown") for m in members):
             raise ValueError("Confirm each member's platform: android, iphone, or unknown.")
         self.photo_layout
+        self.announce_reaction_votes
         if not 1 <= float(d.get("poll_seconds", 3)) <= 3600:
             raise ValueError("poll_seconds must be between 1 and 3600.")
 

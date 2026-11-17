@@ -45,6 +45,7 @@ class ActionRequest:
     vote: str = ""
     arg: str = ""
     source: Optional[dict] = None
+    announce: bool = True  # False for silent reaction votes; the verdict is always posted
 
 
 @dataclass(frozen=True)
@@ -545,6 +546,10 @@ def _execute_generative_nominate(store, request: ActionRequest, check: StateChec
 def _execute_vote(store, request: ActionRequest, check: StateCheck) -> None:
     voter, name = request.actor.name, check.canonical_name
 
+    def say(text: str) -> None:
+        if request.announce:
+            store.queue(text, case_id=check.case_id)
+
     def total() -> int:
         return store.db.execute("SELECT COUNT(*) FROM votes WHERE case_id=?", (check.case_id,)).fetchone()[0]
 
@@ -553,7 +558,7 @@ def _execute_vote(store, request: ActionRequest, check: StateCheck) -> None:
             "DELETE FROM votes WHERE case_id=? AND sender_id=?",
             (check.case_id, request.actor.id),
         )
-        store.queue(lines(f"@{voter} cleared their vote on {name}.", _votes_line(total())), case_id=check.case_id)
+        say(lines(f"@{voter} cleared their vote on {name}.", _votes_line(total())))
         return
 
     label = "YES" if request.vote == "yes" else "NO"
@@ -562,10 +567,7 @@ def _execute_vote(store, request: ActionRequest, check: StateCheck) -> None:
             "UPDATE votes SET vote=? WHERE case_id=? AND sender_id=?",
             (request.vote, check.case_id, request.actor.id),
         )
-        store.queue(
-            lines(f"@{voter} changed their vote to {label} on {name}.", _votes_line(total())),
-            case_id=check.case_id,
-        )
+        say(lines(f"@{voter} changed their vote to {label} on {name}.", _votes_line(total())))
         return
 
     store.db.execute(
@@ -579,17 +581,14 @@ def _execute_vote(store, request: ActionRequest, check: StateCheck) -> None:
         else f"@{voter} has voted against {name} being a generational talent."
     )
     if count < 3:
-        store.queue(lines(headline, _votes_line(count)), case_id=check.case_id)
+        say(lines(headline, _votes_line(count)))
         return
 
     store.db.execute(
         "UPDATE cases SET all_votes_at=? WHERE id=?",
         (store.clock(), check.case_id),
     )
-    store.queue(
-        lines(headline, "3/3 votes in. Result in 1 minute.", f"Finish now: !final (@{check.nominator_name})"),
-        case_id=check.case_id,
-    )
+    say(lines(headline, "3/3 votes in. Result in 1 minute.", f"Finish now: !final (@{check.nominator_name})"))
 
 
 def _execute_help(store) -> None:

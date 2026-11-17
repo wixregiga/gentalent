@@ -80,6 +80,16 @@ Two checks guard these assumptions:
     `isGif: true`, up to 2.9 MB so far. **Not yet observed:** the bot sending one
     (`attachment.type = "gif"`, which the spec lists).
 
+14. **Documented.** `Message.reactions` lists `{id, reactionKey, participantID, emoji}`;
+    `id` equals the participant ID when a network allows one reaction per person.
+    **Observed:** Google Messages reactions from all three phones come through as plain
+    emoji keys (`👍`, `😂`, `😡`), one per person, on any message including the bot's.
+    Reacting creates no new message, so GenTalent re-reads the nomination announcement on
+    each poll while a vote is open (the WebSocket is "at-most-once", with "no replay on
+    reconnect"). **Not yet observed:** how a removed reaction or an iPhone tapback appears.
+    In the `stitched` photo layout the announcement's ID is its photo, so only reactions on
+    the photo count there.
+
 ## Failure history (2026-11-16)
 
 | What happened | Cause | Now |

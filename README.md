@@ -14,6 +14,7 @@ Replies come from the account paired with Beeper, prefixed `@gentalent-bot says:
 | `!gt Name. Pitch` | Nominate. The nominator's vote counts as yes (1/3). |
 | `!!gt Name. Pitch` | Nominate with three AI-found photos (see Photos below). Runs AI at most once per nominee. |
 | `!!Y` / `!!N` / `!!C` (or `!!yes`, `!!no`, `!!clear`) | Vote, change your vote, or clear it, until the third vote is in. |
+| 👍 / 👎 on the nomination announcement | Same as `!!Y` / `!!N`, any skin tone. Switching changes the vote; removing it clears the vote it cast. Silent unless `announce_reaction_votes` is `true` in `config.json`. |
 | `!final` | Nominator only, once all three votes are in. Otherwise the result posts after one minute. |
 | `!gthelp` or `!!gthelp` | Rules and commands. Never runs AI. |
 | `!gtstatus` | Current nominee, who voted what, and the record. |
