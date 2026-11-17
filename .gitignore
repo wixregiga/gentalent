@@ -1,0 +1,52 @@
+# Secrets and real config. Real values live in config.json and ~/.config/gentalent/.
+# Commit config.example.json instead.
+config.json
+*.token
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+tumblr.json
+credentials*.json
+secrets*.json
+
+# Runtime state: live and dry-run ballots, SQLite WAL/SHM/lock files, DB backups, AI media.
+.state/
+*.sqlite3
+*.sqlite3-*
+*.sqlite3.lock
+*.db
+
+# Generated output (regenerate instead of committing)
+exports/
+TEST_RESULTS.txt
+welven_da_great_text/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# mise local overrides
+mise.local.toml
+.mise.local.toml
+mise.*.local.toml
+
+# Editors, OS, and Windows-to-WSL copy artifacts
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+*:Zone.Identifier

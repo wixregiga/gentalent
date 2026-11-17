@@ -1,0 +1,43 @@
+[settings]
+experimental = true
+
+[env]
+PYTHONUNBUFFERED = "1"
+DISPLAY = ":0"
+WAYLAND_DISPLAY = "wayland-0"
+XDG_RUNTIME_DIR = "/run/user/1000"
+DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/1000/bus"
+_.path = ["{{ env.HOME }}/.local/share/mise/shims", "{{ env.HOME }}/.local/bin"]
+
+[daemons.beeper]
+run = "exec ./scripts/run-beeper.sh"
+ready_port = 23373
+ready_cmd = "curl -sf http://127.0.0.1:23373/v1/info >/dev/null"
+boot_start = true
+retry = true
+proxy = false
+
+[daemons.gentalent]
+depends = ["beeper"]
+run = "exec ./scripts/run-gentalent-live.sh"
+boot_start = true
+retry = true
+proxy = false
+watch = ["gentalent/**/*.py", "config.json"]
+
+[tasks.test]
+description = "Run GenTalent unit tests"
+run = "python3 -m unittest discover -s tests -v"
+
+[tasks.status]
+description = "Check live Beeper + GenTalent daemon status"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+mise daemons status
+python3 -m gentalent doctor --chat
+'''
+
+[tasks.logs]
+description = "Show recent live GenTalent logs"
+run = "mise daemons logs gentalent -n 50"

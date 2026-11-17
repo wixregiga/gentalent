@@ -1,0 +1,34 @@
+{
+  "beeper_url": "http://localhost:23373",
+  "chat_id": "REPLACE_WITH_UNMERGED_CHAT_ID",
+  "account_id": "REPLACE_WITH_GOOGLE_MESSAGES_ACCOUNT_ID",
+  "owner_id": "REPLACE_WITH_YOUR_SENDER_ID",
+  "members": [
+    {
+      "id": "REPLACE_WITH_YOUR_SENDER_ID",
+      "name": "You",
+      "platform": "android"
+    },
+    {
+      "id": "REPLACE_MEMBER_2",
+      "name": "Member 2",
+      "platform": "iphone"
+    },
+    {
+      "id": "REPLACE_MEMBER_3",
+      "name": "Member 3",
+      "platform": "android"
+    }
+  ],
+  "database": ".state/gentalent.sqlite3",
+  "token_file": "~/.config/gentalent/beeper.token",
+  "tumblr_blog": "",
+  "tumblr_credentials": "~/.config/gentalent/tumblr.json",
+  "poll_seconds": 3,
+  "media_dir": ".state/media",
+  "ai_providers": [
+    {"cli": "codex", "model": "gpt-6.1-sol"},
+    {"cli": "claude", "model": "sonnet"},
+    {"cli": "agy", "model": "gemini-4-carbon-medium"}
+  ]
+}

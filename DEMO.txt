@@ -1,0 +1,44 @@
+OFFLINE DEMO — fictional people; no Beeper, Tumblr, or model connection.
+Alice: !!gthelp
+Alice: @gentalent-bot says: Rules: 3/3 unanimous YES certifies; any NO denies permanently. Change/clear votes with !!Y, !!N, !!C until the 3rd vote locks a 1m timer (or nominator sends !final). Commands: !gt Name. Pitch | !!gt Name. Pitch (3 photos) | !!Y / !!N / !!C | !final | !gtstatus | !gtlist [winners|losers]
+Alice: !gt Aster example. Carried an iconic show for years and stayed scandal-free. Generational talent for sure.
+Alice: @gentalent-bot says: @Alice would like to nominate Aster Example as a 2026 Generational Talent Nominee (3/3 YES certifies; any NO denies forever). Vote with !!Y, !!N, or !!C (!gthelp for rules). 1/3 votes are in.
+Bob: !gtstatus
+Alice: @gentalent-bot says: Active: Aster Example (1/3 — @Alice:YES; waiting on @Bob, @Carol; !!gt Aster Example for photos) · Record: 0 certified, 0 denied · Commands: !!Y | !!N | !!C | !gtlist | !gthelp
+Bob: I don't know. I hated their acting in that show.
+Bob: !!N
+Alice: @gentalent-bot says: @Bob has voted against Aster Example being a generational talent. 2/3 votes submitted.
+Alice: !!Y
+Bob: !!C
+Alice: @gentalent-bot says: @Bob cleared their vote on Aster Example. 1/3 votes submitted.
+Bob: !!C
+Carol: !!Y
+Alice: @gentalent-bot says: @Carol has voted for Aster Example to be a generational talent! 2/3 votes submitted.
+Bob: But I did like them in that other movie so my vote is yes.
+Alice: You have to use the right keyword @Bob
+Bob: !!YES
+Alice: @gentalent-bot says: @Bob has voted for Aster Example to be a generational talent! 3/3 votes submitted. Finalizing in 1 minute (or @Alice can send !final now).
+Alice: !final
+Alice: @gentalent-bot says: Congratulations Aster Example! You are officially a Generational Talent!
+Carol: !gtlist
+Alice: @gentalent-bot says: Winners (1): Aster Example · Current nominee: none
+Alice: !public A fictional nominee used to demonstrate the GenTalent workflow.
+Alice: @gentalent-bot says: Public case text prepared. Review with preview before !approve-public.
+Alice: !approve-public
+Alice: @gentalent-bot says: Current public record approved. The organizer can now publish this exact version.
+MOCK public record: https://example.tumblr.com/post/1001
+PASS: keyword nomination, vote changes/clears, !final certification, and mock publication.
+PASS: restart preserves ballot and ignores replay.
+Bob: !gt Birch example. Strong early run.
+Alice: @gentalent-bot says: @Bob would like to nominate Birch Example as a 2026 Generational Talent Nominee (3/3 YES certifies; any NO denies forever). Vote with !!Y, !!N, or !!C (!gthelp for rules). 1/3 votes are in.
+Alice: !!N
+Alice: @gentalent-bot says: @Alice has voted against Birch Example being a generational talent. 2/3 votes submitted.
+Carol: !!Y
+Alice: @gentalent-bot says: @Carol has voted for Birch Example to be a generational talent! 3/3 votes submitted. Finalizing in 1 minute (or @Bob can send !final now).
+Alice: @gentalent-bot says: Birch Example did not receive a unanimous vote (2/3 yes) and is permanently denied from Generational Talent.
+Alice: !gt BIRCH EXAMPLE. Trying again.
+Alice: @gentalent-bot says: Birch Example was previously denied and can never be nominated again.
+Alice: !gtlist losers
+Alice: @gentalent-bot says: Losers (1): Birch Example · Current nominee: none
+PASS: 60s wait finalizes denial and permanently prevents renomination.
+PASS: public payload omits the roster, phone numbers, and individual votes.
