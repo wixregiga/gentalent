@@ -1,6 +1,9 @@
 [settings]
 experimental = true
 
+[tools]
+go = "1.27.1"
+
 [env]
 PYTHONUNBUFFERED = "1"
 DISPLAY = ":0"
@@ -27,8 +30,8 @@ retry = true
 proxy = false
 
 [tasks.test]
-description = "Run GenTalent unit tests"
-run = "python3 -m unittest discover -s tests -v"
+description = "Run the Python and Go test suites"
+run = ["python3 -m unittest discover -s tests", "go vet ./...", "go test ./..."]
 
 [tasks.privacy]
 description = "Scan every commit on every local branch for personal data and secrets"
