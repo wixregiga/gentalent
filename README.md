@@ -18,9 +18,17 @@ Replies come from the account paired with Beeper, prefixed `@gentalent-bot says:
 | `!gthelp` or `!!gthelp` | Rules and commands. Never runs AI. |
 | `!gtstatus` | Current nominee, who voted what, and the record. |
 | `!gtlist` / `!gtlist losers` | Certified winners (default) or denied nominees. |
+| `!gtshame [nominee] [reason]` as a reply | Shame the author of that message, quoting it, with a GIF. One shame given per nominee each. |
+| `!gtshame @Name [nominee] [reason]` | The same, by tag. The nominee defaults to the latest one. |
+| `!gtfeedback idea` / `!gtsuggest idea` | Log an idea for the bot. Read them with `python3 -m gentalent feedback --live`. |
 
 Messages from outside the configured group and roster, and edited, deleted or hidden
 messages, are ignored, as are the bot's own replies.
+
+Nominees can be named the way the bot shows them, squashed (`jordanabrewster`), in any
+case, with or without emoji. A near-miss spelling gets "Did you mean ...?" and does nothing.
+Shames are permanent records of that moment (the target's vote, the quoted message), like
+denials. Shame GIFs live in `.state/media/shame-gifs/`, used least-used first.
 
 ## Photos
 

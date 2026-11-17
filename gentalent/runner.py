@@ -5,6 +5,7 @@ from pathlib import Path
 import sqlite3
 import time
 from .net import APIError, plain_text
+from .shame import wants_reply_context
 
 SEND_FAILURES = ("FAIL_RETRIABLE", "FAIL_PERMANENT")
 
@@ -66,8 +67,14 @@ def new_messages(api, cursor, after):
 
 
 def same_text(stored, sent):
-    """Compare Beeper's stored text with what was sent, as people see it, ignoring whitespace."""
-    return " ".join(plain_text(stored).split()) == " ".join((sent or "").split())
+    """Compare Beeper's stored text with what was sent, as people see it.
+
+    Whitespace and Markdown emphasis marks are ignored: quoted chat text such as "*mid*" is
+    sent as-is but stored as <em>mid</em>.
+    """
+    def words(text):
+        return " ".join(text.translate(str.maketrans("", "", "*_`~\\")).split())
+    return words(plain_text(stored)) == words(sent or "")
 
 
 def delivery_state(message, pending_id):
@@ -133,11 +140,27 @@ def poll_once(store, api, live=False):
     api.verify_chat()
     for messages, cursor in new_messages(api, store.get("cursor") or None, after):
         for message in messages:
-            store.handle(message)
+            store.handle(with_reply_context(api, message))
         with store.db:
             store.set("cursor", cursor or "")
     store.finalize_due()
     flush(store, api, live)
+
+
+def with_reply_context(api, message):
+    """Attach the replied-to message ("linked") when a command needs it, before handling.
+
+    A deleted or unknown message (HTTP 404) becomes linked=None so the command can say so.
+    Any other failure propagates: the poll stops before the cursor moves and retries later.
+    """
+    if not wants_reply_context(message):
+        return message
+    try:
+        return dict(message, linked=api.retrieve(message["linkedMessageID"]))
+    except APIError as error:
+        if error.status_code != 404:
+            raise
+        return dict(message, linked=None)
 
 
 def run(store, api, live=False, once=False):

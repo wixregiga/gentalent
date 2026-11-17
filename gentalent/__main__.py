@@ -8,6 +8,7 @@ import sys
 from urllib.parse import quote
 from .config import Config
 from .net import Beeper, APIError, secret_write
+from .feedback import entries as feedback_entries
 from .runner import arm, contract_report, lock_database, open_unlocked, resolve_send, run, status_report
 from .state import Store
 
@@ -38,12 +39,13 @@ def make_parser():
     r = sub.add_parser("run", help="Poll the group and reply. Without --live, replies are previews only.")
     r.add_argument("--once", action="store_true")
     sub.add_parser("status", help="Show cases and replies needing attention (read-only; safe while running).")
+    sub.add_parser("feedback", help="List !gtfeedback and !gtsuggest entries (read-only; safe while running).")
     rs = sub.add_parser("resolve-send", help="Record a checked outcome for an uncertain or failed reply.")
     rs.add_argument("outbox_id")
     outcome = rs.add_mutually_exclusive_group(required=True)
     outcome.add_argument("--message-id", help="Beeper message ID that delivered this reply; verified against Beeper.")
     outcome.add_argument("--not-delivered", action="store_true", help="Record that the reply never arrived. It is not resent.")
-    for s in (a, r, rs, sub.choices["status"]):
+    for s in (a, r, rs, sub.choices["status"], sub.choices["feedback"]):
         s.add_argument("--live", action="store_true", help="Use the real ballot. run --live sends replies.")
     gm = sub.add_parser("generate-media", help="Run the subscription-only multi-model photo strip builder.")
     gm.add_argument("name")
@@ -152,6 +154,13 @@ def main(argv=None):
         db = open_unlocked(path, read_only=True)
         try:
             print(json.dumps(status_report(db), indent=2, ensure_ascii=False))
+        finally:
+            db.close()
+        return 0
+    if args.command == "feedback":
+        db = open_unlocked(path, read_only=True)
+        try:
+            print(json.dumps(feedback_entries(db), indent=2, ensure_ascii=False))
         finally:
             db.close()
         return 0

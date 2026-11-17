@@ -68,6 +68,15 @@ Two checks guard these assumptions:
 11. **Observed.** Messages from friends' phones show `sendStatus` absent and their own
     bridge sender IDs. Nobody needs the Beeper app on a phone.
 
+12. **Documented.** A reply carries `linkedMessageID`, "ID of the message this is a reply
+    to". `mentions` lists tagged user IDs, or is null "for legacy messages that require text
+    scanning". **Observed:** both come through from Google Messages; 11 of the last 94
+    messages were replies, and a reply also lists the replied-to author in `mentions`.
+    `!gtshame` uses `linkedMessageID` and falls back to `mentions`.
+13. **Observed.** GIFs from phones arrive as attachments with `mimeType: image/gif` and
+    `isGif: true`, up to 2.9 MB so far. **Not yet observed:** the bot sending one
+    (`attachment.type = "gif"`, which the spec lists).
+
 ## Failure history (2026-11-16)
 
 | What happened | Cause | Now |

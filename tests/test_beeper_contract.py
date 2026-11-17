@@ -78,6 +78,8 @@ class StoredHtmlTest(unittest.TestCase):
     def test_formatted_reply_matches_its_stored_html(self):
         self.assertTrue(same_text(STORED_FORMATTED, SENT_FORMATTED))
         self.assertTrue(same_text("Tom &amp; Jerry<br>2/3 votes in.", "Tom & Jerry  \n2/3 votes in."))
+        # Quoted chat text keeps its Markdown when sent; Beeper stores the rendered HTML.
+        self.assertTrue(same_text('They said: &quot;<em>mid</em>&quot;<br>Next', 'They said: "*mid*"  \nNext'))
 
     def test_different_words_still_differ(self):
         self.assertFalse(same_text(STORED_FORMATTED.replace("1/3", "2/3"), SENT_FORMATTED))

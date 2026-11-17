@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 import hashlib
 import re
 from typing import Optional
-from .config import PREFIX
-from .net import plain_text
+from . import feedback, shame
+from .replies import VOTE_KEYS, lines, sections
 
 
 HONORIFIC_PREFIXES = {"dr", "mr", "mrs", "ms", "mx", "prof", "rev", "st", "mt", "capt", "col", "gen", "sgt"}
@@ -32,6 +32,7 @@ class Invocation:
     keyword: str
     body: str
     timestamp: str
+    source: Optional[dict] = None  # the raw Beeper message, for commands that need more than text
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class ActionRequest:
     reason: str = ""
     vote: str = ""
     arg: str = ""
+    source: Optional[dict] = None
 
 
 @dataclass(frozen=True)
@@ -165,7 +167,7 @@ def check_keyword(message: dict, config, is_own_outbox: bool = False) -> Optiona
     text = (message.get("text") or "").strip()
     if not text:
         return None
-    if plain_text(text).strip().casefold().startswith(PREFIX.casefold()):
+    if is_own_outbox:
         return None
 
     timestamp = message.get("timestamp") or ""
@@ -179,6 +181,12 @@ def check_keyword(message: dict, config, is_own_outbox: bool = False) -> Optiona
     list_match = re.match(r"^!{1,2}gtlist(?:\s+(.*))?$", text, flags=re.IGNORECASE | re.DOTALL)
     if list_match:
         return Invocation(keyword="!gtlist", body=(list_match.group(1) or "").strip(), timestamp=timestamp)
+
+    for command in (shame.COMMAND, feedback.COMMAND):
+        if (match := command.match(text)):
+            keyword = "!gtshame" if command is shame.COMMAND else "!gt" + match.group(1).casefold()
+            return Invocation(keyword=keyword, body=(match.groups()[-1] or "").strip(),
+                              timestamp=timestamp, source=message)
 
     # Check !!gt before !gt
     gen_match = re.match(r"^!!gt(?:\s+(.*))?$", text, flags=re.IGNORECASE | re.DOTALL)
@@ -248,6 +256,10 @@ def parse_action(invocation: Invocation, sender_id: str, config) -> ActionReques
 
     if invocation.keyword == "!final":
         return ActionRequest(kind="finalize", actor=actor, year=year)
+
+    if invocation.keyword in ("!gtshame", "!gtfeedback", "!gtsuggest"):
+        return ActionRequest(kind=invocation.keyword[3:], actor=actor, year=year,
+                             arg=invocation.body, source=invocation.source)
 
     raise ValueError(f"Unhandled keyword: {invocation.keyword}")
 
@@ -356,7 +368,7 @@ def check_state(store, request: ActionRequest, normalized_fn, rule_error_cls) ->
 
         if cur["all_votes_at"] is not None or votes_in >= 3:
             raise rule_error_cls(
-                _block(f"Voting is locked: 3/3 votes are in on {cur['name']}.",
+                lines(f"Voting is locked: 3/3 votes are in on {cur['name']}.",
                        f"Result in under a minute, or @{nominator_name} can send !final.")
             )
 
@@ -426,6 +438,12 @@ def execute_strategy(store, request: ActionRequest, check: StateCheck, normalize
     if request.kind == "gtlist":
         _execute_gtlist(store, request)
         return
+    if request.kind == "shame":
+        shame.run(store, request)
+        return
+    if request.kind in ("feedback", "suggest"):
+        feedback.run(store, request)
+        return
     raise ValueError(f"Unknown action kind: {request.kind}")
 
 
@@ -454,31 +472,18 @@ def _create_case_and_auto_yes(store, request: ActionRequest, check: StateCheck, 
     return case_id
 
 
-# Replies go through Beeper's text input, which accepts plain text or Markdown and does not
-# say how it treats line breaks. Lines inside a block end with Markdown hard breaks (two
-# trailing spaces, invisible as plain text); blocks are separated by a blank line. No line
-# may start with Markdown syntax (-, *, +, #, >, "1.").
-def _block(*lines: str) -> str:
-    return "  \n".join(line for line in lines if line)
-
-
-def _message(*blocks: str) -> str:
-    return "\n\n".join(block for block in blocks if block)
-
-
-VOTE_KEYS = "Vote: !!Y yes · !!N no · !!C clear"
-NOMINATE_KEYS = _block("Nominate: !gt Name. Pitch", "With photos: !!gt Name. Pitch")
+NOMINATE_KEYS = lines("Nominate: !gt Name. Pitch", "With photos: !!gt Name. Pitch")
 
 
 def _nomination_prompt(actor_name: str, canonical_name: str, year: int, note: str = "") -> str:
-    return _message(
-        _block(
+    return sections(
+        lines(
             f"@{actor_name} would like to nominate {canonical_name} as a {year} Generational Talent Nominee!",
             "3/3 YES certifies. Any NO denies forever.",
             "1/3 votes are in.",
             note,
         ),
-        _block(VOTE_KEYS, "Rules: !gthelp"),
+        lines(VOTE_KEYS, "Rules: !gthelp"),
     )
 
 
@@ -503,7 +508,7 @@ def _execute_generative_nominate(store, request: ActionRequest, check: StateChec
 
     def announcement(note: str = "") -> str:
         if check.upgrade_existing_case:
-            return _block(f"Added 3 photos for {check.canonical_name}.", _votes_line(check.votes_in), note)
+            return lines(f"Added 3 photos for {check.canonical_name}.", _votes_line(check.votes_in), note)
         return _nomination_prompt(request.actor.name, check.canonical_name, request.year, note)
 
     try:
@@ -528,7 +533,7 @@ def _execute_generative_nominate(store, request: ActionRequest, check: StateChec
                 store.queue_photo(photo, case_id)
     except Exception as exc:
         if check.upgrade_existing_case:
-            fallback = _block(
+            fallback = lines(
                 f"Could not find photos for {check.canonical_name} right now ({exc}).",
                 _votes_line(check.votes_in),
             )
@@ -548,7 +553,7 @@ def _execute_vote(store, request: ActionRequest, check: StateCheck) -> None:
             "DELETE FROM votes WHERE case_id=? AND sender_id=?",
             (check.case_id, request.actor.id),
         )
-        store.queue(_block(f"@{voter} cleared their vote on {name}.", _votes_line(total())), case_id=check.case_id)
+        store.queue(lines(f"@{voter} cleared their vote on {name}.", _votes_line(total())), case_id=check.case_id)
         return
 
     label = "YES" if request.vote == "yes" else "NO"
@@ -558,7 +563,7 @@ def _execute_vote(store, request: ActionRequest, check: StateCheck) -> None:
             (request.vote, check.case_id, request.actor.id),
         )
         store.queue(
-            _block(f"@{voter} changed their vote to {label} on {name}.", _votes_line(total())),
+            lines(f"@{voter} changed their vote to {label} on {name}.", _votes_line(total())),
             case_id=check.case_id,
         )
         return
@@ -574,7 +579,7 @@ def _execute_vote(store, request: ActionRequest, check: StateCheck) -> None:
         else f"@{voter} has voted against {name} being a generational talent."
     )
     if count < 3:
-        store.queue(_block(headline, _votes_line(count)), case_id=check.case_id)
+        store.queue(lines(headline, _votes_line(count)), case_id=check.case_id)
         return
 
     store.db.execute(
@@ -582,25 +587,27 @@ def _execute_vote(store, request: ActionRequest, check: StateCheck) -> None:
         (store.clock(), check.case_id),
     )
     store.queue(
-        _block(headline, "3/3 votes in. Result in 1 minute.", f"Finish now: !final (@{check.nominator_name})"),
+        lines(headline, "3/3 votes in. Result in 1 minute.", f"Finish now: !final (@{check.nominator_name})"),
         case_id=check.case_id,
     )
 
 
 def _execute_help(store) -> None:
-    store.queue(_message(
-        _block(
+    store.queue(sections(
+        lines(
             "How GenTalent works",
             "3/3 YES certifies. Any NO denies forever.",
             "Change or clear your vote until the 3rd vote is in.",
             "Then the result posts in 1 minute, or the nominator sends !final.",
         ),
-        _block(
+        lines(
             NOMINATE_KEYS,
             VOTE_KEYS,
             "Finish early: !final (nominator)",
             "Status: !gtstatus",
             "Lists: !gtlist · !gtlist losers",
+            "Shame: reply to a message with !gtshame reason, or !gtshame @Name reason",
+            "Ideas for the bot: !gtfeedback your idea",
         ),
     ))
 
@@ -616,9 +623,9 @@ def _execute_gtstatus(store) -> None:
     cur = store.current()
     if not cur or cur["phase"] != "voting":
         last = f"Last: {cur['name']}, {cur['phase']}" if cur else ""
-        store.queue(_message(
-            _block("No vote right now", last, record),
-            _block(NOMINATE_KEYS, "More: !gtlist · !gthelp"),
+        store.queue(sections(
+            lines("No vote right now", last, record),
+            lines(NOMINATE_KEYS, "More: !gtlist · !gthelp"),
         ))
         return
 
@@ -634,14 +641,13 @@ def _execute_gtstatus(store) -> None:
         rem = max(0, int(round(60.0 - (store.clock() - float(cur["all_votes_at"])))))
         nominator = store.config.roster[cur["nominator"]]["name"]
         summary = f"3/3 votes in, locked. Result in about {rem}s."
-        keys = _block(f"Finish now: !final (@{nominator})", "More: !gtlist · !gthelp")
-        photos = ""
+        keys = lines(f"Finish now: !final (@{nominator})", "More: !gtlist · !gthelp")
     else:
         summary = _votes_line(len(votes))
-        keys = _block(VOTE_KEYS, "More: !gtlist · !gthelp")
-        photos = "Photos: ready" if cur["ai_invoked"] else f"Photos: send !!gt {cur['name']}"
-    store.queue(_message(
-        _block(f"Now voting: {cur['name']}", summary, *ballot, photos, record),
+        add_photos = "" if cur["ai_invoked"] else f"Add photos: !!gt {cur['name']}"
+        keys = lines(VOTE_KEYS, add_photos, "More: !gtlist · !gthelp")
+    store.queue(sections(
+        lines(f"Now voting: {cur['name']}", summary, *ballot, record),
         keys,
     ))
 
@@ -664,4 +670,4 @@ def _execute_gtlist(store, request: ActionRequest) -> None:
             "SELECT n.name FROM denials d JOIN nominees n ON n.id=d.nominee_id ORDER BY d.rowid")]
         title, mark, other = "Losers", "🚫", "More: !gtlist winners · !gtstatus"
     entries = [f"{mark} {name}" for name in names] or ["None yet"]
-    store.queue(_message(_block(f"{title} ({len(names)})", *entries), _block(now_voting, other)))
+    store.queue(sections(lines(f"{title} ({len(names)})", *entries), lines(now_voting, other)))

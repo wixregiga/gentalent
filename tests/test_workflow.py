@@ -372,7 +372,7 @@ class WorkflowTest(unittest.TestCase):
         _, reply, _ = self.send("person1", "!gtstatus")
         self.assertIn("Now voting: Eva Longoria  \n1/3 votes in.", reply)
         self.assertIn("✅ Me: YES  \n⏳ Person1: waiting  \n⏳ Person2: waiting", reply)
-        self.assertIn("Photos: send !!gt Eva Longoria", reply)
+        self.assertIn("Vote: !!Y yes · !!N no · !!C clear  \nAdd photos: !!gt Eva Longoria", reply)
         self.assertIn("Vote: !!Y yes · !!N no · !!C clear", reply)
 
         _, reply, _ = self.send("person2", "!gtlist winners")

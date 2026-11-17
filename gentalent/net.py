@@ -10,10 +10,14 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, HTTPRedirectHandler, ProxyHandler, build_opener
 
 
+LINE_TAGS = re.compile(r"</?(?:br|p|div|li|ul|ol|blockquote|h[1-6])\b[^>]*>", re.IGNORECASE)
+
+
 def plain_text(value):
     """The text people see. Beeper stores sent Markdown as HTML (blocks as <p>, hard breaks
-    as <br>; observed in doc/beeper-api.md item 7), so drop tags and decode entities."""
-    return html.unescape(re.sub(r"<[^>]+>", " ", value or ""))
+    as <br>; observed in doc/beeper-api.md item 7). Line-level tags become spaces, inline tags
+    such as <em> vanish, and entities are decoded."""
+    return html.unescape(re.sub(r"<[^>]+>", "", LINE_TAGS.sub(" ", value or "")))
 
 
 class APIError(Exception):
@@ -158,7 +162,7 @@ class Beeper:
             mime = mimetypes.guess_type(path.name)[0] or "image/jpeg"
             body["attachment"] = {
                 "uploadID": upload_id,
-                "type": "image",
+                "type": "gif" if mime == "image/gif" else "image",
                 "fileName": path.name,
                 "mimeType": mime,
             }

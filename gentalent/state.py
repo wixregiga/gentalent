@@ -1,20 +1,13 @@
 from pathlib import Path
 import sqlite3
 import time
-import unicodedata
 import uuid
 from .config import PREFIX
+from .errors import RuleError
 from .generative import STRIP_FILENAME
+from .net import plain_text
+from .nominees import normalized
 from .workflow import check_keyword, parse_action, check_state, execute_strategy
-
-
-class RuleError(Exception):
-    pass
-
-
-def normalized(value):
-    return "".join(c for c in unicodedata.normalize("NFKC", value).casefold()
-                   if c.isalnum())
 
 
 SCHEMA = """
@@ -44,6 +37,17 @@ CREATE TABLE IF NOT EXISTS outbox(
   pending_id TEXT, final_id TEXT, kind TEXT NOT NULL,
   attachment_path TEXT NOT NULL DEFAULT '',
   case_id INTEGER);
+CREATE TABLE IF NOT EXISTS shames(
+  id INTEGER PRIMARY KEY, case_id INTEGER NOT NULL REFERENCES cases(id),
+  shamer_id TEXT NOT NULL, target_id TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '',
+  target_vote TEXT, shamed_message_id TEXT, shamed_text TEXT, shamed_at TEXT,
+  gif TEXT NOT NULL DEFAULT '', message_id TEXT NOT NULL, created_at TEXT NOT NULL,
+  UNIQUE(case_id, shamer_id));
+CREATE TRIGGER IF NOT EXISTS keep_shames_delete BEFORE DELETE ON shames BEGIN SELECT RAISE(ABORT,'Shames are permanent'); END;
+CREATE TRIGGER IF NOT EXISTS keep_shames_update BEFORE UPDATE ON shames BEGIN SELECT RAISE(ABORT,'Shames are permanent'); END;
+CREATE TABLE IF NOT EXISTS feedback(
+  id INTEGER PRIMARY KEY, message_id TEXT NOT NULL UNIQUE, sender_id TEXT NOT NULL,
+  kind TEXT NOT NULL, text TEXT NOT NULL, said_at TEXT NOT NULL);
 """
 
 
@@ -156,16 +160,19 @@ class Store:
         with self.db:
             return self.finalize_case(cur["id"])
 
+    def is_own_message(self, message):
+        """True for a message this bot sent: a recorded send ID, or its reply prefix."""
+        msg_id = message.get("id")
+        if msg_id and self.db.execute(
+            "SELECT 1 FROM outbox WHERE pending_id=? OR final_id=?", (msg_id, msg_id)
+        ).fetchone():
+            return True
+        return plain_text(message.get("text")).strip().casefold().startswith(PREFIX.casefold())
+
     def handle(self, message):
         msg_id = message.get("id")
-        is_own_outbox = bool(
-            msg_id and self.db.execute(
-                "SELECT 1 FROM outbox WHERE pending_id=? OR final_id=?",
-                (msg_id, msg_id),
-            ).fetchone()
-        )
         # 1. Check if the keyword was invoked
-        invocation = check_keyword(message, self.config, is_own_outbox=is_own_outbox)
+        invocation = check_keyword(message, self.config, is_own_outbox=self.is_own_message(message))
         if invocation is None:
             return False
         # 2. Check the action being requested and by whom

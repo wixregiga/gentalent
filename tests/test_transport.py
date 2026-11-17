@@ -167,10 +167,14 @@ class TransportTest(unittest.TestCase):
                 self.assertEqual(state["posts"][2]["attachment"]["fileName"], "strip.jpg")
                 with self.assertRaises(ValueError):
                     api.send("")
+                gif = Path(self.temp.name) / "shame.gif"
+                gif.write_bytes(b"GIF89a")
+                api.send("shame", attachment_path=str(gif))
+                self.assertEqual(state["posts"][-1]["attachment"]["type"], "gif")
                 state["foreign"] = True
                 with self.assertRaises(APIError):
                     api.send("must not be sent")
-                self.assertEqual(len(state["posts"]), 3)
+                self.assertEqual(len(state["posts"]), 4)
             finally:
                 server.shutdown()
                 worker.join()
