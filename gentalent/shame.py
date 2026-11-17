@@ -14,7 +14,7 @@ from typing import Optional
 from .errors import RuleError
 from .net import plain_text
 from .nominees import leading_reference
-from .replies import inline, lines
+from .replies import inline, lines, literal
 
 COMMAND = re.compile(r"^!gtshame(?:\s+(.*))?$", re.IGNORECASE | re.DOTALL)
 REASON_LIMIT = 300
@@ -42,6 +42,12 @@ def run(store, request) -> None:
         if store.is_own_message(shamed):
             return  # Replies to the bot's own messages are not supported yet; stay silent.
         target_id = shamed.get("senderID")
+        tagged_id, after_tag = _tagged_member(store.config, source, body)
+        if tagged_id is not None:
+            if tagged_id != target_id:
+                raise RuleError("You replied to one person but tagged another. Reply without a tag, "
+                                "or tag without replying.")
+            body = after_tag
     else:
         target_id, body = _tagged_member(store.config, source, body)
         if target_id is None:
@@ -80,8 +86,8 @@ def run(store, request) -> None:
         lines(
             "🔔 SHAME 🔔",
             f"@{request.actor.name} shames @{roster[target_id]['name']} over {case['name']}.",
-            f"Reason: {reason}" if reason else "",
-            f'They said: "{quote}"' if quote else "",
+            f"Reason: {literal(reason)}" if reason else "",
+            f'They said: "{literal(quote)}"' if quote else "",
             f"Their vote right now: {vote.upper() if vote else 'not cast'}",
             "" if gif else "(No shame GIFs in the bank yet.)",
         ),

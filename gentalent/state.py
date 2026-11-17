@@ -161,13 +161,25 @@ class Store:
             return self.finalize_case(cur["id"])
 
     def is_own_message(self, message):
-        """True for a message this bot sent: a recorded send ID, or its reply prefix."""
+        """True for a message this bot sent.
+
+        Checked by recorded send ID, by the reply prefix, and, for photos and GIFs (which have
+        no text and whose final ID may not be recorded yet), by an attachment file name the
+        bot has sent from the owner's account.
+        """
         msg_id = message.get("id")
         if msg_id and self.db.execute(
             "SELECT 1 FROM outbox WHERE pending_id=? OR final_id=?", (msg_id, msg_id)
         ).fetchone():
             return True
-        return plain_text(message.get("text")).strip().casefold().startswith(PREFIX.casefold())
+        if plain_text(message.get("text")).strip().casefold().startswith(PREFIX.casefold()):
+            return True
+        if message.get("senderID") != self.config.data["owner_id"]:
+            return False
+        names = {a.get("fileName") for a in message.get("attachments") or [] if a.get("fileName")}
+        sent = {Path(r[0]).name for r in self.db.execute(
+            "SELECT attachment_path FROM outbox WHERE attachment_path <> ''")}
+        return bool(names & sent)
 
     def handle(self, message):
         msg_id = message.get("id")

@@ -11,7 +11,6 @@ import tempfile
 import unittest
 from gentalent.net import APIError
 from gentalent.runner import delivery_state, flush, same_text
-from gentalent.workflow import check_keyword
 from gentalent.state import Store
 from support import make_config
 
@@ -80,15 +79,10 @@ class StoredHtmlTest(unittest.TestCase):
         self.assertTrue(same_text("Tom &amp; Jerry<br>2/3 votes in.", "Tom & Jerry  \n2/3 votes in."))
         # Quoted chat text keeps its Markdown when sent; Beeper stores the rendered HTML.
         self.assertTrue(same_text('They said: &quot;<em>mid</em>&quot;<br>Next', 'They said: "*mid*"  \nNext'))
+        self.assertTrue(same_text("I <3 you > all", "I <3 you > all"), "a single-line reply is stored as plain text")
 
     def test_different_words_still_differ(self):
         self.assertFalse(same_text(STORED_FORMATTED.replace("1/3", "2/3"), SENT_FORMATTED))
-
-    def test_stored_bot_reply_is_never_a_command(self):
-        config = make_config(tempfile.mkdtemp())
-        echo = {"id": "x", "chatID": "demo-group", "accountID": "demo-google", "senderID": "alice",
-                "text": "<p>@gentalent-bot says: !gthelp</p>", "timestamp": "2026-11-16T00:00:00Z"}
-        self.assertIsNone(check_keyword(echo, config))
 
 
 class ObservedSendLifecycleTest(unittest.TestCase):

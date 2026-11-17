@@ -7,6 +7,7 @@ A close-but-wrong spelling is never guessed: the caller gets a suggestion to con
 """
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+import re
 from typing import Optional
 import unicodedata
 
@@ -58,8 +59,14 @@ def leading_reference(store, text: str) -> Reference:
 def _near_miss(store, words) -> str:
     names = store.db.execute(
         "SELECT a.alias, n.name FROM aliases a JOIN cases c ON c.nominee_id=a.nominee_id "
-        "JOIN nominees n ON n.id=c.nominee_id"
+        "JOIN nominees n ON n.id=c.nominee_id ORDER BY c.id DESC"
     ).fetchall()
+    if words:
+        # "Sandra ..." or "Jordana's ...": someone's first name, which never falls back silently.
+        first = normalized(re.sub(r"['’]s$", "", words[0], flags=re.IGNORECASE))
+        for _, name in names:
+            if len(first) >= 3 and normalized(name.split()[0]) == first:
+                return name
     best, best_ratio = "", SUGGEST_RATIO
     for count in range(1, min(len(words), MAX_NAME_WORDS) + 1):
         key = normalized(" ".join(words[:count]))

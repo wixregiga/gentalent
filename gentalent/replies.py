@@ -19,6 +19,14 @@ def sections(*blocks: str) -> str:
     return "\n\n".join(block for block in blocks if block)
 
 
+MARKDOWN_SPECIALS = "\\`*_[]<>~|"
+
+
+def literal(text: str) -> str:
+    """Backslash-escape Markdown so user text renders as typed and cannot join lines or links."""
+    return "".join("\\" + c if c in MARKDOWN_SPECIALS else c for c in text)
+
+
 def inline(text: str, limit: int) -> str:
     """User-supplied text squeezed onto one line, so it cannot add lines or sections."""
     flat = " ".join((text or "").split())

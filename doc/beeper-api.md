@@ -53,6 +53,9 @@ Two checks guard these assumptions:
    blocks as `<p>` and hard breaks as `<br>`, and phones show separate lines. A plain
    single-line reply is stored unchanged. Text comparisons and the bot's own-message check
    therefore use the text without tags, with entities decoded.
+   Text people typed (shame reasons and quotes) is backslash-escaped before sending, so it
+   renders as typed and cannot open a code span or link across lines. **Not yet observed:**
+   how the escapes look on phones; CommonMark removes them when rendering.
 8. **Observed.** A reply with a photo arrives as two messages: an `IMAGE` message
    (`attachments[].fileName == "strip.jpg"`, no `text` key), then a separate `TEXT`
    message. The pending ID resolves to the `IMAGE` message.

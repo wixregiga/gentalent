@@ -150,16 +150,15 @@ def poll_once(store, api, live=False):
 def with_reply_context(api, message):
     """Attach the replied-to message ("linked") when a command needs it, before handling.
 
-    A deleted or unknown message (HTTP 404) becomes linked=None so the command can say so.
-    Any other failure propagates: the poll stops before the cursor moves and retries later.
+    Any failure becomes linked=None and the command says it couldn't load the message; the
+    sender can try again. Raising instead would stop every poll at this message, so a lasting
+    error would freeze the bot.
     """
     if not wants_reply_context(message):
         return message
     try:
         return dict(message, linked=api.retrieve(message["linkedMessageID"]))
-    except APIError as error:
-        if error.status_code != 404:
-            raise
+    except APIError:
         return dict(message, linked=None)
 
 

@@ -21,5 +21,8 @@ def run(store, request) -> None:
 
 
 def entries(db):
+    """All entries, oldest first; empty until the bot has started once with this feature."""
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='feedback'").fetchone():
+        return []
     return [dict(r) for r in db.execute(
         "SELECT said_at, sender_id, kind, text FROM feedback ORDER BY id")]

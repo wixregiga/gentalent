@@ -4,7 +4,7 @@ import unittest
 from gentalent.config import Config
 from gentalent.net import APIError
 from gentalent.nominees import leading_reference
-from gentalent.runner import with_reply_context
+from gentalent.runner import poll_once, with_reply_context
 from gentalent.shame import _tagged_member, gif_dir, pick_gif
 from gentalent.state import Store
 from support import make_config
@@ -56,7 +56,7 @@ class ShameTest(unittest.TestCase):
 
         self.assertIn("🔔 SHAME 🔔", reply["text"])
         self.assertIn("@Avery shames @Dee Diaz over Jordana Brewster.", reply["text"])
-        self.assertIn('They said: "nah she\'s *mid*"', reply["text"])
+        self.assertIn('They said: "nah she\'s \\*mid\\*"', reply["text"])  # escaped: shows as typed
         self.assertIn("Their vote right now: NO", reply["text"])
         self.assertTrue(reply["attachment_path"].endswith("cersei.gif"))
         [record] = self.shames()
@@ -112,6 +112,8 @@ class ShameTest(unittest.TestCase):
             self.assertEqual((ref.case["name"], ref.rest), (name, rest), text)
         typo = leading_reference(self.store, "Adrina Lima. she wins")
         self.assertEqual((typo.case, typo.suggestion), (None, "Adriana Lima"))
+        for first_name in ("Sandra he voted yes", "Sandra's fault"):
+            self.assertEqual(leading_reference(self.store, first_name).suggestion, "Sandra Bullock 👀")
         plain = leading_reference(self.store, "he's a hater")
         self.assertEqual((plain.case, plain.rest, plain.suggestion), (None, "he's a hater", ""))
         reply, _ = self.say("nate", "!gtshame @Avery Adrina Lima. lol")
@@ -146,15 +148,57 @@ class ShameTest(unittest.TestCase):
         self.assertEqual(api.calls, [], "only reply-shames fetch the replied-to message")
         shame_reply = {"id": "r2", "linkedMessageID": "x", "text": "!gtshame hater"}
         self.assertEqual(with_reply_context(api, shame_reply)["linked"]["senderID"], "dee")
-        api.status = 404
-        self.assertIsNone(with_reply_context(api, shame_reply)["linked"])
-        api.status = 500
-        with self.assertRaises(APIError):
-            with_reply_context(api, shame_reply)
+        for status in (404, 500):
+            api.status = status
+            self.assertIsNone(with_reply_context(api, shame_reply)["linked"])
 
         self.say("avery", "!gt Jordana Brewster. Icon.")
         reply, _ = self.say("nate", "!gtshame hater", linkedMessageID="gone", linked=None)
         self.assertIn("I couldn't load the message you replied to.", reply["text"])
+
+    def test_a_failing_reply_fetch_never_stalls_the_poll(self):
+        class Api:
+            def verify_chat(self):
+                return {}
+
+            def messages(self, cursor=None):
+                stamp = "2999-01-01T00:00:0{}Z"
+                return {"newestCursor": "c1", "hasMore": False, "items": [
+                    {"id": "p1", "chatID": "demo-group", "accountID": "demo-google", "senderID": "nate",
+                     "text": "!gtshame hater", "linkedMessageID": "x", "timestamp": stamp.format(1)},
+                    {"id": "p2", "chatID": "demo-group", "accountID": "demo-google", "senderID": "nate",
+                     "text": "!gthelp", "timestamp": stamp.format(2)}]}
+
+            def retrieve(self, message_id):
+                raise APIError("API returned HTTP 500", status_code=500)
+
+        self.say("avery", "!gt Jordana Brewster. Icon.")
+        with self.store.db:
+            self.store.set("armed", "2026-01-01T00:00:00+00:00")
+        poll_once(self.store, Api(), live=False)
+        self.assertEqual(self.store.get("cursor"), "c1")
+        texts = [r[0] for r in self.store.db.execute("SELECT text FROM outbox ORDER BY rowid")][-2:]
+        self.assertIn("I couldn't load the message you replied to.", texts[0])
+        self.assertIn("How GenTalent works", texts[1])
+
+    def test_bot_messages_are_recognized_without_a_recorded_id(self):
+        self.say("avery", "!gt Jordana Brewster. Icon.")
+        with self.store.db:
+            self.store.queue_photo("/media/jordana_brewster/photos/01_jordana_brewster.jpg", 1)
+        html = {"id": "u1", "senderID": "avery", "text": "<p>@gentalent-bot says: hi<br>there</p>"}
+        photo = {"id": "u2", "senderID": "avery", "attachments": [{"fileName": "01_jordana_brewster.jpg"}]}
+        own_gif = {"id": "u3", "senderID": "avery", "attachments": [{"fileName": "38381e86.gif"}]}
+        friend = dict(photo, id="u4", senderID="dee")
+        self.assertEqual([self.store.is_own_message(m) for m in (html, photo, own_gif, friend)],
+                         [True, True, False, False])
+
+    def test_reply_that_tags_someone_else_is_refused(self):
+        self.say("avery", "!gt Jordana Brewster. Icon.")
+        _, said = self.say("dee", "she's mid")
+        reply, _ = self.say("avery", "!gtshame @Nate hater", linkedMessageID=said["id"], linked=said)
+        self.assertIn("You replied to one person but tagged another.", reply["text"])
+        self.say("avery", "!gtshame @Deedee hater", linkedMessageID=said["id"], linked=said, mentions=["dee"])
+        self.assertEqual([(s["target_id"], s["reason"]) for s in self.shames()], [("dee", "hater")])
 
     def test_gif_rotation_and_empty_bank(self):
         self.assertIsNone(pick_gif(self.store))

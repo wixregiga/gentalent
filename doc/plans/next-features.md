@@ -29,11 +29,18 @@ How it works:
 
 - **Reply form (primary):** reply to someone's message with `!gtshame [nominee] [reason]`.
   The target is that message's author, and the exact text is quoted and recorded. Before
-  handling, the polling loop fetches the replied-to message (`linkedMessageID`); a deleted
-  one gets "I couldn't load the message you replied to", other API errors retry the poll.
+  handling, the polling loop fetches the replied-to message (`linkedMessageID`). If that
+  fails for any reason the reply is "I couldn't load the message you replied to" and the
+  sender can retry; retrying the poll instead would freeze the bot on a lasting error.
+  A reply that also tags a different member is refused as ambiguous.
 - **Tag form:** `!gtshame @Name [nominee] [reason]`. Names match the roster's full or first
   name; otherwise a single Beeper `mentions` entry is used.
-- **Replies to the bot's own messages are ignored, silently.** The bot posts from the
+- **Nominee words:** an exact or squashed name selects that nominee. A typo, or a first
+  name or possessive alone ("Sandra", "Jordana's"), gets "Did you mean ...?" and records
+  nothing, so a shame never lands on the wrong nominee. With no nominee words it is the
+  latest nominee.
+- **Replies to the bot's own messages are ignored, silently.** Bot photos and GIFs, which
+  have no text, are recognized by the file names the bot sent. The bot posts from the
   owner's account, so the replied-to author would be wrong. Supporting them needs each
   outbox row to record the member it is about; add that where `shame.run` resolves the target.
 - Self-shame is refused before a GIF is chosen. Each shame records: nominee (case), shamer,

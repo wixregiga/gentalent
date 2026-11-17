@@ -17,7 +17,7 @@ def plain_text(value):
     """The text people see. Beeper stores sent Markdown as HTML (blocks as <p>, hard breaks
     as <br>; observed in doc/beeper-api.md item 7). Line-level tags become spaces, inline tags
     such as <em> vanish, and entities are decoded."""
-    return html.unescape(re.sub(r"<[^>]+>", "", LINE_TAGS.sub(" ", value or "")))
+    return html.unescape(re.sub(r"</?[A-Za-z][^>]*>", "", LINE_TAGS.sub(" ", value or "")))
 
 
 class APIError(Exception):
