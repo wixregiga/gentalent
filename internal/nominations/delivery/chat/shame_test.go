@@ -102,7 +102,7 @@ func TestTaggedShames(t *testing.T) {
 		{"B94 a full name, any case", "!gtshame @ALEX lol", nil, alex.ID, "lol"},
 		{"B94 a name must end at a non-alphanumeric", "!gtshame @Caseyx lol", []string{string(casey.ID)}, casey.ID, "lol"},
 		{"B95 one mention when the name matches nobody", "!gtshame @Cee lol", []string{string(casey.ID)}, casey.ID, "lol"},
-		{"B109 a nominee named first", "!gtshame @Casey jUnO vAlE 👀 — voted no", nil, casey.ID, "voted no"},
+		{"B109 a nominee named first", "!gtshame @Casey jUnO vAlE 👀 \u2014 voted no", nil, casey.ID, "voted no"},
 		{"Q17 a nominee named by number", "!gtshame @Casey 1 voted no", nil, casey.ID, "voted no"},
 		{"B112 no match is all reason", "!gtshame @Casey totally unrelated", nil, casey.ID, "totally unrelated"},
 	}

@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	voteStart = regexp.MustCompile(`(?i)(?:^|\s)!!(yes|y|no|n|clear|c)(?:$|[\s!.,;:\-—–])`)
+	voteStart = regexp.MustCompile(`(?i)(?:^|\s)!!(yes|y|no|n|clear|c)(?:$|[\s!.,;:\-\x{2014}\x{2013}])`)
 	voteWords = map[string]domain.Vote{"yes": domain.Yes, "y": domain.Yes, "no": domain.No, "n": domain.No, "clear": domain.NotVoted, "c": domain.NotVoted}
 )
 

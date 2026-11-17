@@ -11,8 +11,8 @@ const nameLimit = 80
 
 var (
 	nominateWord  = regexp.MustCompile(`(?i)^nominate\s+`)
-	quotedName    = regexp.MustCompile(`(?s)^["“]([^"”]+)["”](?:\s*[.:;,\-—–]*\s*(.*))?$`)
-	clauseBreak   = regexp.MustCompile(`\s+[—–-]\s+|:\s+|[!?]+\s+`)
+	quotedName    = regexp.MustCompile(`(?s)^["“]([^"”]+)["”](?:\s*[.:;,\-\x{2014}\x{2013}]*\s*(.*))?$`)
+	clauseBreak   = regexp.MustCompile(`\s+[\x{2014}\x{2013}-]\s+|:\s+|[!?]+\s+`)
 	sentenceBreak = regexp.MustCompile(`\.(\s+|$)`)
 	initial       = regexp.MustCompile(`^[A-Za-z](?:\.[A-Za-z])*$`)
 	dottedInitial = regexp.MustCompile(`^[A-Za-z](?:\.[A-Za-z])+$`)

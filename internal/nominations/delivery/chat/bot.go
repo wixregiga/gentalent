@@ -102,7 +102,7 @@ var routes = []route{
 	{regexp.MustCompile(`(?is)^!gt(feedback|suggest)(?:\s+(.*))?$`), (*Bot).recordFeedback},
 	{regexp.MustCompile(`(?is)^!{1,2}gtrenominate(?:\s.*)?$`), (*Bot).renominateAll},
 	{regexp.MustCompile(`(?is)^!{1,2}gt(?:\s+(.*))?$`), (*Bot).nominateAll},
-	{regexp.MustCompile(`(?is)^!!(?:yes|y|no|n|clear|c)(?:$|[\s!.,;:\-—–].*)$`), (*Bot).vote},
+	{regexp.MustCompile(`(?is)^!!(?:yes|y|no|n|clear|c)(?:$|[\s!.,;:\-\x{2014}\x{2013}].*)$`), (*Bot).vote},
 	{regexp.MustCompile(`(?is)^!final(?:\s+(.*))?$`), (*Bot).final},
 }
 

@@ -21,7 +21,7 @@ const (
 var (
 	numberReference = regexp.MustCompile(`^#?(\d+)(?:\s*-\s*#?(\d+))?(?:$|[\s.,:;!?])`)
 	possessive      = regexp.MustCompile(`(?i)['’]s$`)
-	leadingNoise    = ".:;,-–— "
+	leadingNoise    = ".:;,-\u2013\u2014 "
 )
 
 type reference struct {

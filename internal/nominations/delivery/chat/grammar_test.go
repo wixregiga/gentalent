@@ -61,7 +61,7 @@ func TestNomineeNames(t *testing.T) {
 		name, body, nominee, pitch string
 	}{
 		{"B23 a leading nominate word is dropped", "nominate juno vale. Pitch", "Juno Vale", "Pitch"},
-		{"B24 a quoted name", `"remy  quill" — the pitch`, "Remy Quill", "the pitch"},
+		{"B24 a quoted name", "\"remy  quill\" \u2014 the pitch", "Remy Quill", "the pitch"},
 		{"B24 curly quotes", "“Juno Vale”: pitch", "Juno Vale", "pitch"},
 		{"B25 a multi-line body", "Juno Vale. Inline\nsecond line\nthird", "Juno Vale", "Inline second line\nthird"},
 		{"B26 a spaced hyphen", "juno vale - she rules", "Juno Vale", "she rules"},
@@ -153,4 +153,20 @@ func TestVoteWords(t *testing.T) {
 
 func domainNumber(number int) domain.NominationNumber {
 	return domain.NominationNumber(number)
+}
+
+func TestHelpWithMoreWordsIsANominee(t *testing.T) {
+	h := newHarness(t, oneAtATime)
+	h.send(alex, "!gt help me")
+	if got := h.nomination(1).Person.Name; got != "Help Me" {
+		t.Fatalf("B18 !gt help me nominates Help Me, got %q", got)
+	}
+}
+
+func TestALongRangeIsRefused(t *testing.T) {
+	h := newHarness(t, oneAtATime)
+	h.send(alex, "!gt Juno Vale. Pitch")
+	if got := h.say(blair, "!!Y 1-100"); got != "Name Nominations by number, e.g. !!Y 12 or !!Y 12-14." {
+		t.Fatalf("a range of 50 or more Nominations is refused, got %q", got)
+	}
 }
