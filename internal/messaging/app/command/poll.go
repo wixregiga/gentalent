@@ -13,10 +13,9 @@ import (
 )
 
 type Poller struct {
-	Platform    port.PollReader
-	Store       port.PollStore
-	Group       domain.Group
-	NeedsLinked func(text string) bool
+	Platform port.PollReader
+	Store    port.PollStore
+	Group    domain.Group
 }
 
 func (p Poller) Poll(ctx context.Context) error {
@@ -90,7 +89,7 @@ func (p Poller) inboxItems(ctx context.Context, messages []domain.Message, armed
 		message := domain.Incoming{
 			ID: raw.ID, Sender: raw.Sender, Text: text, SentAt: raw.SentAt, Mentions: raw.Mentions,
 		}
-		if raw.LinkedID != "" && (p.NeedsLinked == nil || p.NeedsLinked(message.Text)) {
+		if raw.LinkedID != "" {
 			message.Linked, err = p.linked(ctx, raw.LinkedID)
 			if err != nil {
 				return nil, err

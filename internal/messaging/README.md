@@ -4,6 +4,7 @@ Messaging stores incoming messages and sends replies. The application uses ports
 for the conversation, the inbox, the outbox, and local attachment evidence.
 Only the platform adapter translates platform payloads. The composition root
 passes reply bodies to `command.Enqueuer` after formatting and escaping them.
+Port types carry no serialization tags; cmd renders discovery output.
 
 ## Worker wiring
 
@@ -18,9 +19,9 @@ passes reply bodies to `command.Enqueuer` after formatting and escaping them.
    marks interrupted sends uncertain. Status and resolve-send use independent
    connections and skip worker startup.
 4. Use `Armer.Arm` to establish a baseline and `Poller.Poll` to fetch messages after
-   it. The optional `Poller.NeedsLinked` predicate receives normalized text and
-   lets composition fetch linked messages only for commands that need them.
-5. Drain `query.Inbox.Next` in order. Call `Acknowledger.Handled` after the
+   it. Every message that replies to another carries the loaded linked message,
+   or `Missing` when it could not be loaded.
+5. Drain the store's `Next` in order. Call the store's `Handled` after the
    message's effects and replies have been committed and relayed. A failure
    leaves the oldest message available for the next poll.
 6. Flush with the verified platform as both sender and reader in live mode. In

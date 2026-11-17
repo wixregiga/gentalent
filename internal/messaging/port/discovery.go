@@ -17,53 +17,53 @@ type HealthReader interface {
 }
 
 type Account struct {
-	ID      string `json:"accountID"`
-	Network string `json:"network"`
-	Status  string `json:"status"`
-	Bridge  Bridge `json:"bridge"`
-	User    User   `json:"user"`
+	ID      string
+	Network string
+	Status  string
+	Bridge  Bridge
+	User    User
 }
 
 type Bridge struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Provider string `json:"provider"`
+	ID       string
+	Type     string
+	Provider string
 }
 
 type User struct {
-	ID       string `json:"id"`
-	FullName string `json:"fullName"`
-	Username string `json:"username"`
-	IsSelf   bool   `json:"isSelf"`
+	ID       string
+	FullName string
+	Username string
+	IsSelf   bool
 }
 
 type Chat struct {
-	ID           string       `json:"id"`
-	AccountID    string       `json:"accountID"`
-	Network      string       `json:"network"`
-	Title        string       `json:"title"`
-	Type         string       `json:"type"`
-	Participants Participants `json:"participants"`
+	ID           string
+	AccountID    string
+	Network      string
+	Title        string
+	Type         string
+	Participants Participants
 }
 
 type Participants struct {
-	Items   []Participant `json:"items"`
-	HasMore bool          `json:"hasMore"`
-	Total   int64         `json:"total"`
+	Items   []Participant
+	HasMore bool
+	Total   int64
 }
 
 type Participant struct {
 	User
-	PhoneNumber   string `json:"phoneNumber,omitempty"`
-	Email         string `json:"email,omitempty"`
-	ImageURL      string `json:"imgURL,omitempty"`
-	CannotMessage bool   `json:"cannotMessage,omitempty"`
-	IsAdmin       bool   `json:"isAdmin,omitempty"`
-	IsNetworkBot  bool   `json:"isNetworkBot,omitempty"`
-	IsPending     bool   `json:"isPending,omitempty"`
+	PhoneNumber   string
+	Email         string
+	ImageURL      string
+	CannotMessage bool
+	IsAdmin       bool
+	IsNetworkBot  bool
+	IsPending     bool
 }
 
 type ChatPage struct {
-	Items   []Chat `json:"items"`
-	HasMore bool   `json:"has_more"`
+	Items   []Chat
+	HasMore bool
 }

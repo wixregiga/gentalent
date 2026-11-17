@@ -156,17 +156,18 @@ func TestArmAndCursorGuards(t *testing.T) {
 	}
 }
 
-func TestPollCallerCanSelectWhichLinkedMessagesNeedLoading(t *testing.T) {
+func TestPollLoadsEveryLinkedMessageAndMarksAFailedLoadMissing(t *testing.T) {
 	at := time.Now().UTC()
 	group := domain.Group{ChatID: "group", AccountID: "account", Members: []string{"alex"}}
-	base := domain.Message{ID: "one", ChatID: "group", AccountID: "account", Sender: "alex", SentAt: at, LinkedID: "missing", Text: "ordinary reply"}
-	needsLink := base
-	needsLink.ID = "two"
-	needsLink.Text = "<p>needs &amp; uses quote</p>"
+	plain := domain.Message{ID: "one", ChatID: "group", AccountID: "account", Sender: "alex", SentAt: at, Text: "no reply"}
+	reply := plain
+	reply.ID = "two"
+	reply.LinkedID = "missing"
+	reply.Text = "<p>needs &amp; uses quote</p>"
 	store := &pollStore{baseline: port.Baseline{Cursor: "start", ArmedAt: at}}
 	p := Poller{
-		Platform: pollPlatform{pages: map[string]port.Page{"start": {Messages: []domain.Message{base, needsLink}}}},
-		Store:    store, Group: group, NeedsLinked: func(text string) bool { return text == " needs & uses quote " },
+		Platform: pollPlatform{pages: map[string]port.Page{"start": {Messages: []domain.Message{plain, reply}}}},
+		Store:    store, Group: group,
 	}
 	if err := p.Poll(t.Context()); err != nil || len(store.items) != 2 {
 		t.Fatalf("poll = %+v, %v", store.items, err)
