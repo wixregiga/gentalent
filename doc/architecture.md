@@ -25,7 +25,7 @@ internal/
     domain/                    a photo search, its manifest and its result
     app/command/               find a Person's photos
     port/                      the agent programs and the image tool
-    infra/agents/              codex, claude, agy; the image stitcher
+    infra/programs/            codex, claude, agy and the image tool
   shared/                      no product meaning
     sqlitedb/                  open (WAL, busy timeout), migrate by PRAGMA user_version, backup
 ```
@@ -70,7 +70,7 @@ exists, reading it only; the Python file itself is never changed.
 | A new chat command | `nominations/delivery/chat/<command>.go`, its handler in `app/command` or `app/query` |
 | Reply wording | `nominations/delivery/chat` only |
 | A new chat platform | a new adapter in `messaging/infra/`, chosen in `cmd/gentalent` |
-| A new AI program | `ai/infra/agents/<program>.go` |
+| A new AI program | `ai/infra/programs/<program>.go` |
 | A table change | a new numbered migration in that hexagon's `infra/sqlite` |
 
 ## Conventions

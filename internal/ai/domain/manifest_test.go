@@ -97,7 +97,7 @@ func TestSourcesListsEachPhotoWithItsProvenance(t *testing.T) {
 	}
 	got := manifest.Sources("claude:sonnet", []string{"01_a.jpg", "02_a.jpg", "03_a.jpg"})
 	for _, want := range []string{
-		"Aster Example: Google Messages attachments\nProvider: claude:sonnet\nSummary: Representative photos.\n",
+		"Aster Example: photos\nProvider: claude:sonnet\nSummary: Representative photos.\n",
 		"02_a.jpg\nCaption: A caption\nSource page: https://example.org/page\nImage URL: https://example.org/img.jpg\n",
 	} {
 		if !strings.Contains(got, want) {

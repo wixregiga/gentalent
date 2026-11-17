@@ -59,7 +59,7 @@ func NewManifest(canonicalName, summary string, photos []PhotoSource) (Manifest,
 
 func (m Manifest) Sources(provider string, savedPhotos []string) string {
 	lines := []string{
-		m.CanonicalName + ": Google Messages attachments",
+		m.CanonicalName + ": photos",
 		"Provider: " + provider,
 		"Summary: " + m.Summary,
 		"",

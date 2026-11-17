@@ -1,4 +1,4 @@
-package agents
+package programs
 
 import (
 	"context"
@@ -7,28 +7,25 @@ import (
 	"gentalent/internal/ai/port"
 )
 
-type Agy struct{}
+type Claude struct{}
 
-func (Agy) Run(ctx context.Context, task port.Task) (domain.Manifest, error) {
+func (Claude) Run(ctx context.Context, task port.Task) (domain.Manifest, error) {
 	if err := emptyRawFolder(task.Raw); err != nil {
-		return domain.Manifest{}, err
-	}
-	schema, err := writeSchema(task.Folder)
-	if err != nil {
 		return domain.Manifest{}, err
 	}
 	args := []string{
 		"-p",
 		"--model", task.Model,
 		"--effort", "low",
-		"--dangerously-skip-permissions",
+		"--no-session-persistence",
 		"--disable-slash-commands",
+		"--permission-mode", "bypassPermissions",
 		"--add-dir", task.Raw,
 		"--output-format", "json",
-		"--json-schema", schema,
+		"--json-schema", manifestSchema,
 		task.Prompt,
 	}
-	stdout, err := runProvider(ctx, "agy", task.Raw, "", args)
+	stdout, err := runProvider(ctx, "claude", task.Raw, "", args)
 	if err != nil {
 		return domain.Manifest{}, err
 	}

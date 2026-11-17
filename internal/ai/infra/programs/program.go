@@ -1,4 +1,4 @@
-package agents
+package programs
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -40,7 +41,7 @@ func subscriptionEnvironment(base []string) []string {
 	kept := make([]string, 0, len(base))
 	for _, entry := range base {
 		name, _, _ := strings.Cut(entry, "=")
-		if !contains(strippedEnvironment, name) {
+		if !slices.Contains(strippedEnvironment, name) {
 			kept = append(kept, entry)
 		}
 	}
@@ -95,13 +96,4 @@ func firstText(preferred, fallback string) string {
 		text = text[:exitTextLimit]
 	}
 	return text
-}
-
-func contains(list []string, item string) bool {
-	for _, candidate := range list {
-		if candidate == item {
-			return true
-		}
-	}
-	return false
 }

@@ -1,4 +1,4 @@
-package agents
+package programs
 
 import "gentalent/internal/ai/port"
 
