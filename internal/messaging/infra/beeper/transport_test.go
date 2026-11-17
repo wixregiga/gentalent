@@ -139,3 +139,65 @@ func TestRetrieveRejectsAnotherAccount(t *testing.T) {
 		t.Fatal("accepted message from another account")
 	}
 }
+
+func TestUploadErrorNeverSendsMessage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "photo.jpg")
+	if err := os.WriteFile(path, []byte("image"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, body, path string
+		status           int
+		uploads          int32
+	}{
+		{"missing file", "{}", filepath.Join(t.TempDir(), "missing.jpg"), 200, 0},
+		{"server error", `{"error":"upload rejected","uploadID":"invalid"}`, path, 200, 1},
+		{"missing upload ID", `{}`, path, 200, 1},
+		{"failed request", "unavailable", path, 503, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var uploads, sends atomic.Int32
+			client := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.EscapedPath() {
+				case "/v1/chats/group%2Fone":
+					fmt.Fprint(w, verifiedChat)
+				case "/v1/assets/upload":
+					uploads.Add(1)
+					w.WriteHeader(tc.status)
+					fmt.Fprint(w, tc.body)
+				case "/v1/chats/group%2Fone/messages":
+					sends.Add(1)
+				default:
+					t.Errorf("unexpected request: %s", r.URL)
+				}
+			})
+			receipt, err := client.Send(t.Context(), domain.Outgoing{Attachment: tc.path})
+			if err == nil || receipt.PendingID != "" || uploads.Load() != tc.uploads || sends.Load() != 0 {
+				t.Fatalf("invalid upload: receipt %+v, error %v, uploads %d, sends %d", receipt, err, uploads.Load(), sends.Load())
+			}
+		})
+	}
+}
+
+func TestSendRequiresScopedPendingIDInResponse(t *testing.T) {
+	for _, tc := range []struct{ name, body string }{
+		{"different chat", `{"chatID":"other","pendingMessageID":"pending"}`},
+		{"missing pending ID", `{"chatID":"group/one"}`},
+		{"malformed JSON", `{"chatID":`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.Method == http.MethodGet {
+					fmt.Fprint(w, verifiedChat)
+				} else {
+					fmt.Fprint(w, tc.body)
+				}
+			})
+			if receipt, err := client.Send(t.Context(), domain.Outgoing{Text: "reply"}); err == nil || receipt.PendingID != "" {
+				t.Fatalf("invalid confirmation = %+v, %v", receipt, err)
+			}
+		})
+	}
+}

@@ -82,3 +82,23 @@ func TestCursorAndLinkedMessageShape(t *testing.T) {
 		t.Fatalf("GIF message = %+v", second)
 	}
 }
+
+func TestLookupHonorsDocumentedDeliveryStatuses(t *testing.T) {
+	for status, want := range map[string]domain.State{
+		"SUCCESS":        domain.Sent,
+		"FAIL_RETRIABLE": domain.Failed,
+		"FAIL_PERMANENT": domain.Failed,
+		"NEW_STATUS":     domain.Pending,
+	} {
+		t.Run(status, func(t *testing.T) {
+			client := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprintf(w, `{%s,"sendStatus":{"status":%q,"timestamp":"2026-11-16T23:49:39.327Z"}}`, capturedText, status)
+			})
+			message, err := client.Retrieve(t.Context(), "pending")
+			if err != nil || message.Delivery("pending") != want {
+				t.Fatalf("lookup = %+v, %v, want %s", message, err, want)
+			}
+		})
+	}
+}
