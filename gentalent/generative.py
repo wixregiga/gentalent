@@ -8,20 +8,6 @@ import subprocess
 import tempfile
 from typing import Any, Callable, Optional
 
-try:
-    from pydantic import BaseModel, Field, ValidationError, field_validator
-    HAS_PYDANTIC = True
-except ImportError:  # pragma: no cover - stdlib fallback for system python
-    BaseModel = None
-    HAS_PYDANTIC = False
-
-
-DEFAULT_AI_PROVIDERS = [
-    {"cli": "codex", "model": "gpt-6.1-sol"},
-    {"cli": "claude", "model": "sonnet"},
-    {"cli": "agy", "model": "gemini-4-carbon-medium"},
-]
-
 STRIPPED_API_KEY_VARS = (
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
@@ -55,35 +41,6 @@ MEDIA_MANIFEST_SCHEMA: dict[str, Any] = {
     "required": ["canonical_name", "summary", "photos"],
     "additionalProperties": False,
 }
-
-
-if HAS_PYDANTIC:
-    class PhotoSourceModel(BaseModel):
-        raw_filename: str = Field(min_length=1, max_length=120)
-        source_page_url: str = Field(min_length=1, max_length=2000)
-        image_url: str = Field(min_length=1, max_length=2000)
-        caption: str = Field(min_length=1, max_length=300)
-
-        @field_validator("raw_filename")
-        @classmethod
-        def _safe_filename(cls, value: str) -> str:
-            cleaned = value.strip()
-            if "/" in cleaned or "\\" in cleaned or cleaned in ("", ".", ".."):
-                raise ValueError("raw_filename must be a relative filename inside raw_dir.")
-            return cleaned
-
-
-    class AgentMediaManifestModel(BaseModel):
-        canonical_name: str = Field(min_length=1, max_length=120)
-        summary: str = Field(min_length=1, max_length=1000)
-        photos: list[PhotoSourceModel]
-
-        @field_validator("photos")
-        @classmethod
-        def _three_photos(cls, value: list[PhotoSourceModel]) -> list[PhotoSourceModel]:
-            if len(value) != 3:
-                raise ValueError("Exactly 3 photos are required.")
-            return value
 
 
 @dataclass(frozen=True)
@@ -125,47 +82,37 @@ def subscription_env(base_env: Optional[dict[str, str]] = None) -> dict[str, str
     return env
 
 
+def _text(data: dict, key: str, limit: int) -> str:
+    value = str(data.get(key, "")).strip()
+    if not 1 <= len(value) <= limit:
+        raise ValueError(f"{key} must be 1 to {limit} characters.")
+    return value
+
+
 def validate_manifest(data: Any) -> AgentMediaManifest:
     if not isinstance(data, dict):
         raise ValueError("Agent output must be a JSON object.")
-    if HAS_PYDANTIC:
-        try:
-            model = AgentMediaManifestModel.model_validate(data)
-        except ValidationError as exc:
-            raise ValueError(f"Invalid media manifest: {exc}") from None
-        return AgentMediaManifest(
-            canonical_name=model.canonical_name.strip(),
-            summary=model.summary.strip(),
-            photos=[
-                PhotoSource(
-                    raw_filename=p.raw_filename,
-                    source_page_url=p.source_page_url.strip(),
-                    image_url=p.image_url.strip(),
-                    caption=p.caption.strip(),
-                )
-                for p in model.photos
-            ],
-        )
-
-    canonical_name = str(data.get("canonical_name", "")).strip()
-    summary = str(data.get("summary", "")).strip()
     photos_raw = data.get("photos")
-    if not canonical_name or not summary or not isinstance(photos_raw, list) or len(photos_raw) != 3:
-        raise ValueError("Manifest requires canonical_name, summary, and exactly 3 photos.")
+    if not isinstance(photos_raw, list) or len(photos_raw) != 3:
+        raise ValueError("Manifest requires exactly 3 photos.")
     photos: list[PhotoSource] = []
     for item in photos_raw:
         if not isinstance(item, dict):
             raise ValueError("Each photo entry must be a JSON object.")
-        fn = str(item.get("raw_filename", "")).strip()
-        if "/" in fn or "\\" in fn or fn in ("", ".", ".."):
+        fn = _text(item, "raw_filename", 120)
+        if "/" in fn or "\\" in fn or fn in (".", ".."):
             raise ValueError("raw_filename must be a relative filename inside raw_dir.")
-        src = str(item.get("source_page_url", "")).strip()
-        img = str(item.get("image_url", "")).strip()
-        cap = str(item.get("caption", "")).strip()
-        if not (fn and src and img and cap):
-            raise ValueError("Each photo requires raw_filename, source_page_url, image_url, and caption.")
-        photos.append(PhotoSource(raw_filename=fn, source_page_url=src, image_url=img, caption=cap))
-    return AgentMediaManifest(canonical_name=canonical_name, summary=summary, photos=photos)
+        photos.append(PhotoSource(
+            raw_filename=fn,
+            source_page_url=_text(item, "source_page_url", 2000),
+            image_url=_text(item, "image_url", 2000),
+            caption=_text(item, "caption", 300),
+        ))
+    return AgentMediaManifest(
+        canonical_name=_text(data, "canonical_name", 120),
+        summary=_text(data, "summary", 1000),
+        photos=photos,
+    )
 
 
 def _extract_json_blob(text: str) -> Any:
@@ -318,7 +265,7 @@ def build_media_bundle(
             raise RuntimeError(f"Failed creating 3-photo strip: {strip_res.stderr.strip()}")
 
     sources_lines = [
-        f"{manifest.canonical_name} — Google Messages attachments",
+        f"{manifest.canonical_name}: Google Messages attachments",
         f"Provider: {provider_used}",
         f"Summary: {manifest.summary}",
         "",
@@ -381,15 +328,13 @@ class SubscriptionAgentRunner:
         which_fn: Callable[[str], Optional[str]] = shutil.which,
     ):
         self.config = config
-        self.providers = providers or list(config.data.get("ai_providers") or DEFAULT_AI_PROVIDERS)
+        self.providers = providers or list(config.data["ai_providers"])
         self.timeout = int(timeout)
         self.run_fn = run_fn
         self.which_fn = which_fn
 
     def media_root(self) -> Path:
-        if "media_dir" in self.config.data and self.config.data["media_dir"]:
-            return self.config.path("media_dir")
-        return self.config.path("database").parent / "media"
+        return self.config.path("media_dir")
 
     def build_prompt(self, nominee_name: str, pitch: str, raw_dir: Path) -> str:
         payload = {
@@ -545,8 +490,7 @@ class SubscriptionAgentRunner:
         if cli_override:
             providers = [p for p in self.providers if p.get("cli") == cli_override]
             if not providers:
-                default_match = [p for p in DEFAULT_AI_PROVIDERS if p.get("cli") == cli_override]
-                providers = default_match or [{"cli": cli_override, "model": "default"}]
+                raise ValueError(f"{cli_override} is not listed in ai_providers in config.json.")
 
         errors: list[str] = []
         for entry in providers:

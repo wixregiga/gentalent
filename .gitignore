@@ -18,6 +18,9 @@ secrets*.json
 *.sqlite3.lock
 *.db
 
+# Pinned live checkout (git worktree managed by scripts/deploy.sh)
+.live/
+
 # Generated output (regenerate instead of committing)
 exports/
 TEST_RESULTS.txt

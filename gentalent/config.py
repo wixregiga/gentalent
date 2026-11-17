@@ -45,11 +45,6 @@ class Config:
             raise ValueError("The owner must be in the three-person roster.")
         if any(m.get("platform") not in ("android", "iphone", "unknown") for m in members):
             raise ValueError("Confirm each member's platform: android, iphone, or unknown.")
-        u = urlsplit(d["beeper_url"])
-        if u.scheme != "http" or u.hostname not in ("localhost", "127.0.0.1", "::1"):
-            raise ValueError("Beeper must use a local HTTP loopback URL.")
-        if u.username or u.password or u.query or u.fragment or u.path not in ("", "/"):
-            raise ValueError("Use a plain local Beeper base URL without credentials or a path.")
         if not 1 <= float(d.get("poll_seconds", 3)) <= 3600:
             raise ValueError("poll_seconds must be between 1 and 3600.")
 

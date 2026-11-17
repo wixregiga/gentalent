@@ -17,25 +17,32 @@ boot_start = true
 retry = true
 proxy = false
 
+# Runs the commit pinned in .live, not the working tree. Editing code never touches the
+# live bot; `mise run deploy` does. There is deliberately no `watch`.
 [daemons.gentalent]
 depends = ["beeper"]
-run = "exec ./scripts/run-gentalent-live.sh"
+run = "exec ./.live/scripts/run-gentalent-live.sh ./config.json"
 boot_start = true
 retry = true
 proxy = false
-watch = ["gentalent/**/*.py", "config.json"]
 
 [tasks.test]
 description = "Run GenTalent unit tests"
 run = "python3 -m unittest discover -s tests -v"
 
+[tasks.deploy]
+description = "Test a commit (default HEAD), pin .live to it, restart the live bot"
+run = "./scripts/deploy.sh"
+
 [tasks.status]
-description = "Check live Beeper + GenTalent daemon status"
+description = "Daemons, deployed commit, Beeper check, and replies needing attention"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
 mise daemons status
+echo "Deployed: $(git -C .live log -1 --format='%h %s' 2>/dev/null || echo 'nothing in .live')"
 python3 -m gentalent doctor --chat
+python3 -m gentalent status --live
 '''
 
 [tasks.logs]

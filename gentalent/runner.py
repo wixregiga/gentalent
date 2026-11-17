@@ -1,10 +1,12 @@
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import fcntl
-import json
 from pathlib import Path
+import sqlite3
 import time
 from .net import APIError
+
+SEND_FAILURES = ("FAIL_RETRIABLE", "FAIL_PERMANENT")
 
 
 def now():
@@ -63,12 +65,27 @@ def new_messages(api, cursor, after):
         cursor = newest
 
 
+def delivery_state(message, pending_id):
+    """Classify a message retrieved by its pendingMessageID.
+
+    The spec says sendStatus is present only "when reported by the bridge". Google Messages
+    omits it once a message is delivered, so a final ID that differs from the pending ID with
+    no sendStatus also means sent. See doc/beeper-api.md.
+    """
+    status = (message.get("sendStatus") or {}).get("status")
+    final_id = str(message.get("id") or "")
+    if status in SEND_FAILURES:
+        return "failed", final_id
+    if status == "SUCCESS" or (status is None and final_id and final_id != pending_id):
+        return "sent", final_id
+    return "pending", final_id
+
+
 def flush(store, api, live=False):
     for row in store.db.execute("SELECT * FROM outbox WHERE status IN ('queued','pending') ORDER BY rowid").fetchall():
-        attachment_path = row["attachment_path"] if "attachment_path" in row.keys() else ""
         if not live:
             if row["status"] == "queued":
-                suffix = f" [ATTACHMENT: {attachment_path}]" if attachment_path else ""
+                suffix = f" [ATTACHMENT: {row['attachment_path']}]" if row["attachment_path"] else ""
                 print("PREVIEW:", row["text"] + suffix)
                 with store.db:
                     store.db.execute("UPDATE outbox SET status='preview' WHERE id=?", (row["id"],))
@@ -77,78 +94,31 @@ def flush(store, api, live=False):
             with store.db:
                 store.db.execute("UPDATE outbox SET status='sending' WHERE id=?", (row["id"],))
             try:
-                pending = api.send(row["text"], attachment_path=attachment_path) if attachment_path else api.send(row["text"])
+                pending = api.send(row["text"], attachment_path=row["attachment_path"] or None)
             except Exception:
                 with store.db:
                     store.db.execute("UPDATE outbox SET status='uncertain' WHERE id=?", (row["id"],))
-                raise APIError(f"Send {row['id']} is uncertain. Inspect the exact thread before resolving it.") from None
+                raise APIError(f"Send {row['id']} is uncertain. Check the thread, then use resolve-send.") from None
             with store.db:
                 store.db.execute("UPDATE outbox SET status='pending',pending_id=? WHERE id=?", (pending, row["id"]))
-            print(f"Send {row['id']}: pending; recipient confirmation is still required.")
-        else:
-            try:
-                message = api.retrieve(row["pending_id"])
-            except APIError as err:
-                if getattr(err, "status_code", None) == 404:
-                    matched_id = None
-                    try:
-                        recent = sorted(
-                            api.messages().get("items", []),
-                            key=lambda m: (m.get("timestamp", ""), m.get("sortKey", "")),
-                        )
-                        used = {
-                            r[0]
-                            for r in store.db.execute(
-                                "SELECT final_id FROM outbox WHERE final_id IS NOT NULL"
-                            ).fetchall()
-                        }
-                        for item in recent:
-                            iid = str(item.get("id") or "")
-                            if (
-                                iid
-                                and not iid.startswith("~")
-                                and iid not in used
-                                and item.get("isSender")
-                                and (item.get("text") or "").strip() == row["text"].strip()
-                            ):
-                                matched_id = iid
-                                break
-                    except APIError:
-                        pass
-                    with store.db:
-                        if matched_id:
-                            store.db.execute(
-                                "UPDATE outbox SET status='sent',final_id=? WHERE id=?",
-                                (matched_id, row["id"]),
-                            )
-                            print(f"Send {row['id']}: matched delivered message {matched_id} after pending ID expired.")
-                        else:
-                            store.db.execute(
-                                "UPDATE outbox SET status='uncertain' WHERE id=?",
-                                (row["id"],),
-                            )
-                            print(f"Send {row['id']}: pending ID expired (HTTP 404); marked uncertain without resending.")
-                    continue
+            print(f"Send {row['id']}: pending.")
+            continue
+        try:
+            message = api.retrieve(row["pending_id"])
+        except APIError as error:
+            if error.status_code != 404:
                 raise
-            send_status = (message.get("sendStatus") or {}).get("status")
-            msg_id = str(message.get("id") or "")
-            delivered_without_status = (
-                send_status is None
-                and bool(msg_id)
-                and msg_id != row["pending_id"]
-                and not msg_id.startswith("~")
-            )
-            if send_status == "SUCCESS" or delivered_without_status:
-                with store.db:
-                    store.db.execute(
-                        "UPDATE outbox SET status='sent',final_id=? WHERE id=?",
-                        (msg_id, row["id"]),
-                    )
-                print(f"Send {row['id']}: network success (id={msg_id}); recipient confirmation is still required.")
-            elif send_status in ("FAIL_RETRIABLE", "FAIL_PERMANENT"):
-                with store.db:
-                    store.db.execute("UPDATE outbox SET status='failed' WHERE id=?", (row["id"],))
-                print(f"Send {row['id']}: network reported failure; no automatic duplicate send.")
+            with store.db:
+                store.db.execute("UPDATE outbox SET status='uncertain' WHERE id=?", (row["id"],))
+            print(f"Send {row['id']}: Beeper no longer knows its pending ID (HTTP 404); marked uncertain. "
+                  "Check the thread, then use resolve-send.")
+            continue
+        state, final_id = delivery_state(message, row["pending_id"])
+        if state == "pending":
+            continue
+        with store.db:
+            store.db.execute("UPDATE outbox SET status=?,final_id=? WHERE id=?", (state, final_id or None, row["id"]))
+        print(f"Send {row['id']}: {state} (id={final_id}).")
 
 
 def poll_once(store, api, live=False):
@@ -181,36 +151,94 @@ def run(store, api, live=False, once=False):
         print("\nStopped. Ballot and cursor are saved; start the same command to resume.")
 
 
-def probe_read(config, api, seconds=120):
-    api.verify_chat()
-    baseline = api.messages()
-    cursor = baseline.get("newestCursor")
-    after = now()
-    observed = set()
-    seen_platforms = set()
-    end = time.monotonic() + seconds
-    print("Ready. Send fresh labeled test messages from each phone platform now.")
-    try:
-        while time.monotonic() < end:
-            for messages, newest in new_messages(api, cursor, after):
-                for m in messages:
-                    if (m.get("id") in observed or m.get("chatID") != config.data["chat_id"]
-                            or m.get("accountID") != config.data["account_id"]
-                            or m.get("senderID") not in config.roster):
-                        continue
-                    observed.add(m["id"])
-                    member = config.roster[m["senderID"]]
-                    seen_platforms.add(member["platform"])
-                    print(json.dumps({"sender_id": m["senderID"], "name": member["name"],
-                        "platform": member["platform"], "own_message": m.get("isSender"),
-                        "text": m.get("text", "")[:240],
-                        "attachment_types": [a.get("type") for a in m.get("attachments", [])],
-                        "link_count": len(m.get("links", []))}, ensure_ascii=False))
-                cursor = newest
-            time.sleep(float(config.data.get("poll_seconds", 3)))
-    except KeyboardInterrupt:
-        pass
-    required = {m["platform"] for m in config.roster.values() if m["platform"] != "unknown"}
-    print("Observed platforms:", ", ".join(sorted(seen_platforms)) or "none")
-    print("Read coverage complete." if required <= seen_platforms else "Read coverage incomplete.")
-    print("The separate labeled reply and recipient confirmation are still required.")
+def open_unlocked(path, read_only=False, timeout=10):
+    """Connect without the worker lock, for commands that must work while the live bot runs.
+
+    Never construct Store here: its startup marks in-flight 'sending' rows uncertain.
+    """
+    if not Path(path).exists():
+        raise ValueError(f"No database at {path}.")
+    target = Path(path).resolve().as_uri() + ("?mode=ro" if read_only else "")
+    db = sqlite3.connect(target, uri=True, timeout=timeout)
+    db.row_factory = sqlite3.Row
+    return db
+
+
+def resolve_send(db, api, outbox_id, message_id=None):
+    """Record a checked outcome for an uncertain or failed reply. Never re-queues a send.
+
+    With message_id, Beeper must confirm that message is ours, in the configured chat, and
+    carries this reply's text. For a photo reply it must carry the same file name and exact
+    byte size as the local strip (Beeper's fileSize matched the local file for every photo
+    reply sent so far); the pending ID of a photo reply resolves to its IMAGE message.
+    Without message_id, the reply is recorded as not delivered (status 'failed').
+    """
+    row = db.execute("SELECT * FROM outbox WHERE id=?", (outbox_id,)).fetchone()
+    if row is None or row["status"] not in ("uncertain", "failed"):
+        raise ValueError("Only an uncertain or failed reply can be resolved.")
+    if message_id is None:
+        with db:
+            db.execute("UPDATE outbox SET status='failed' WHERE id=? AND status=?", (outbox_id, row["status"]))
+        return f"Reply {outbox_id} recorded as not delivered. It will not be resent."
+    if db.execute("SELECT 1 FROM outbox WHERE final_id=? AND id<>?", (message_id, outbox_id)).fetchone():
+        raise ValueError(f"Message {message_id} is already recorded for another reply.")
+    message = api.retrieve(message_id)
+    if not message.get("isSender"):
+        raise ValueError(f"Message {message_id} was not sent by the connected account.")
+    if row["attachment_path"]:
+        local = Path(row["attachment_path"])
+        found = [(a.get("fileName"), a.get("fileSize")) for a in message.get("attachments") or []]
+        if not local.is_file() or found != [(local.name, local.stat().st_size)]:
+            raise ValueError(f"Message {message_id} does not carry this reply's {local.name}.")
+    elif message.get("text") != row["text"]:
+        raise ValueError(f"Message {message_id} text differs from reply {outbox_id}.")
+    with db:
+        changed = db.execute(
+            "UPDATE outbox SET status='sent',final_id=? WHERE id=? AND status=?",
+            (message_id, outbox_id, row["status"]),
+        ).rowcount
+    if changed != 1:
+        raise ValueError(f"Reply {outbox_id} changed while resolving; nothing was recorded.")
+    return f"Reply {outbox_id} recorded as sent (message {message_id})."
+
+
+def status_report(db):
+    cases = [dict(r) for r in db.execute(
+        "SELECT c.id, n.name, c.phase, (SELECT COUNT(*) FROM votes v WHERE v.case_id=c.id) AS votes "
+        "FROM cases c JOIN nominees n ON n.id=c.nominee_id ORDER BY c.id")]
+    attention = [dict(r) for r in db.execute(
+        "SELECT id, status, kind, case_id, substr(text, 1, 80) AS text FROM outbox "
+        "WHERE status IN ('queued', 'sending', 'pending', 'uncertain') ORDER BY rowid")]
+    counts = dict(db.execute("SELECT status, COUNT(*) FROM outbox GROUP BY status").fetchall())
+    return {"cases": cases, "outbox_counts": counts, "outbox_needing_attention": attention}
+
+
+def contract_report(api, db, spec):
+    """Check the live Beeper API against the behavior doc/beeper-api.md relies on. Read-only.
+
+    Returns a list of failures; empty means every check passed.
+    """
+    failures = []
+    schemas = spec.get("components", {}).get("schemas", {})
+    statuses = schemas.get("SendStatus", {}).get("properties", {}).get("status", {}).get("enum")
+    if sorted(statuses or []) != sorted(["SUCCESS", "PENDING", *SEND_FAILURES]):
+        failures.append(f"SendStatus values changed: {statuses}")
+    if "sendStatus" in schemas.get("Message", {}).get("required", []):
+        failures.append("Message.sendStatus became required; the absent-status rule needs review.")
+    get_message = spec.get("paths", {}).get("/v1/chats/{chatID}/messages/{messageID}", {}).get("get", {})
+    if "pendingMessageID" not in (get_message.get("description") or ""):
+        failures.append("GET message no longer documents lookup by pendingMessageID.")
+    rows = db.execute("SELECT id, final_id, text, attachment_path FROM outbox "
+                      "WHERE status='sent' AND final_id IS NOT NULL ORDER BY rowid DESC LIMIT 3").fetchall()
+    if not rows:
+        failures.append("No sent replies recorded yet; message checks skipped.")
+    for row in rows:
+        message = api.retrieve(row["final_id"])
+        state, final_id = delivery_state(message, pending_id="")
+        if state != "sent" or final_id != row["final_id"]:
+            failures.append(f"Delivered reply {row['id']} (message {row['final_id']}) now reads as {state}.")
+        if not message.get("isSender"):
+            failures.append(f"Message {row['final_id']} no longer reads as sent by this account.")
+        if not row["attachment_path"] and message.get("text") != row["text"]:
+            failures.append(f"Message {row['final_id']} text differs from what was sent.")
+    return failures

@@ -22,8 +22,6 @@
   ],
   "database": ".state/gentalent.sqlite3",
   "token_file": "~/.config/gentalent/beeper.token",
-  "tumblr_blog": "",
-  "tumblr_credentials": "~/.config/gentalent/tumblr.json",
   "poll_seconds": 3,
   "media_dir": ".state/media",
   "ai_providers": [

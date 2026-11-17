@@ -2,31 +2,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import re
-from typing import Callable, Optional
+from typing import Optional
+from .config import PREFIX
 
 
 HONORIFIC_PREFIXES = {"dr", "mr", "mrs", "ms", "mx", "prof", "rev", "st", "mt", "capt", "col", "gen", "sgt"}
 NAME_SUFFIXES = {"jr", "sr"}
-BOT_PREFIXES = ("@gentalent-bot says:", "@gentalent says:", "🏛️ GenTalent")
-LEGACY_COMMANDS = (
-    "!nominate",
-    "!exhibit",
-    "!openvote",
-    "!vote",
-    "!status",
-    "!summary",
-    "!public",
-    "!public-link",
-    "!approve-public",
-)
-GT_SUBCOMMANDS = {
-    "status": "!status",
-    "summary": "!summary",
-    "exhibit": "!exhibit",
-    "public": "!public",
-    "public-link": "!public-link",
-    "approve-public": "!approve-public",
-}
 VOTE_ALIASES = {
     "y": "yes",
     "yes": "yes",
@@ -60,7 +41,6 @@ class ActionRequest:
     nominee_name: str = ""
     reason: str = ""
     vote: str = ""
-    command: str = ""
     arg: str = ""
 
 
@@ -74,11 +54,6 @@ class StateCheck:
     prev_vote: Optional[str] = None
     upgrade_existing_case: bool = False
     nominator_name: str = ""
-
-
-# Optional hook signature reserved for future background CLI classification
-# (codex, agy, or claude-code) without changing the 4-step pipeline.
-ClassifierHook = Callable[[Invocation, Actor], Optional[ActionRequest]]
 
 
 def message_year(timestamp: str) -> int:
@@ -189,19 +164,18 @@ def check_keyword(message: dict, config, is_own_outbox: bool = False) -> Optiona
     text = (message.get("text") or "").strip()
     if not text:
         return None
-    lowered = text.casefold()
-    if any(lowered.startswith(prefix.casefold()) for prefix in BOT_PREFIXES):
+    if text.casefold().startswith(PREFIX.casefold()):
         return None
 
     timestamp = message.get("timestamp") or ""
 
-    if re.match(r"^!{1,2}gt?help\s*$", text, flags=re.IGNORECASE):
+    if re.match(r"^!{1,2}gthelp\s*$", text, flags=re.IGNORECASE):
         return Invocation(keyword="!gthelp", body="", timestamp=timestamp)
 
-    if re.match(r"^!{1,2}gt?status\s*$", text, flags=re.IGNORECASE):
+    if re.match(r"^!{1,2}gtstatus\s*$", text, flags=re.IGNORECASE):
         return Invocation(keyword="!gtstatus", body="", timestamp=timestamp)
 
-    list_match = re.match(r"^!{1,2}gt?list(?:\s+(.*))?$", text, flags=re.IGNORECASE | re.DOTALL)
+    list_match = re.match(r"^!{1,2}gtlist(?:\s+(.*))?$", text, flags=re.IGNORECASE | re.DOTALL)
     if list_match:
         return Invocation(keyword="!gtlist", body=(list_match.group(1) or "").strip(), timestamp=timestamp)
 
@@ -226,20 +200,10 @@ def check_keyword(message: dict, config, is_own_outbox: bool = False) -> Optiona
     if re.match(r"^!final\s*$", text, flags=re.IGNORECASE):
         return Invocation(keyword="!final", body="", timestamp=timestamp)
 
-    if text.startswith("!"):
-        command, _, arg = text.partition(" ")
-        if command.casefold() in LEGACY_COMMANDS:
-            return Invocation(keyword=command.casefold(), body=arg.strip(), timestamp=timestamp)
-
     return None
 
 
-def parse_action(
-    invocation: Invocation,
-    sender_id: str,
-    config,
-    classifier: Optional[ClassifierHook] = None,
-) -> ActionRequest:
+def parse_action(invocation: Invocation, sender_id: str, config) -> ActionRequest:
     """Step 2: Determine what action is being requested and by whom."""
     member = config.roster[sender_id]
     actor = Actor(
@@ -250,12 +214,8 @@ def parse_action(
     )
     year = message_year(invocation.timestamp)
 
-    if classifier is not None:
-        classified = classifier(invocation, actor)
-        if classified is not None:
-            return classified
-
     if invocation.keyword in ("!gt", "!!gt"):
+        # "!gt help" / "!gt status" / "!gt list" are commands, never nominees named Help/Status/List.
         head, _, tail = invocation.body.partition(" ")
         head_cf = head.casefold() if head else ""
         if head_cf == "help" and not tail.strip():
@@ -264,13 +224,6 @@ def parse_action(
             return ActionRequest(kind="gtstatus", actor=actor, year=year)
         if head_cf == "list":
             return ActionRequest(kind="gtlist", actor=actor, year=year, arg=tail.strip())
-        if invocation.keyword == "!gt":
-            mapped = GT_SUBCOMMANDS.get(head_cf) if head_cf else None
-            if mapped and (
-                mapped in ("!status", "!summary", "!approve-public") and not tail.strip()
-                or mapped not in ("!status", "!summary", "!approve-public")
-            ):
-                return ActionRequest(kind="legacy", actor=actor, year=year, command=mapped, arg=tail.strip())
         raw_name, reason = split_nominee_and_reason(invocation.body)
         return ActionRequest(
             kind="generative_nominate" if invocation.keyword == "!!gt" else "nominate",
@@ -295,13 +248,7 @@ def parse_action(
     if invocation.keyword == "!final":
         return ActionRequest(kind="finalize", actor=actor, year=year)
 
-    return ActionRequest(
-        kind="legacy",
-        actor=actor,
-        year=year,
-        command=invocation.keyword,
-        arg=invocation.body,
-    )
+    raise ValueError(f"Unhandled keyword: {invocation.keyword}")
 
 
 def make_nominee_id(key: str) -> str:
@@ -330,7 +277,7 @@ def check_state(store, request: ActionRequest, normalized_fn, rule_error_cls) ->
         ).fetchone()
 
         cur = store.current()
-        if cur and cur["phase"] in ("case", "voting"):
+        if cur and cur["phase"] == "voting":
             votes_in = store.db.execute(
                 "SELECT COUNT(*) FROM votes WHERE case_id=?", (cur["id"],)
             ).fetchone()[0]
@@ -387,8 +334,6 @@ def check_state(store, request: ActionRequest, normalized_fn, rule_error_cls) ->
         cur = store.current()
         if cur is None or cur["phase"] in ("certified", "denied"):
             return StateCheck(noop=True)
-        if cur["phase"] == "case":
-            raise rule_error_cls("Open final voting with !openvote first.")
 
         prev_row = store.db.execute(
             "SELECT vote FROM votes WHERE case_id=? AND sender_id=?",
@@ -410,7 +355,7 @@ def check_state(store, request: ActionRequest, normalized_fn, rule_error_cls) ->
 
         if cur["all_votes_at"] is not None or votes_in >= 3:
             raise rule_error_cls(
-                f"Voting is locked with 3/3 votes in on {cur['name']} — finalizing in under a minute "
+                f"Voting is locked with 3/3 votes in on {cur['name']}; finalizing in under a minute "
                 f"(or @{nominator_name} can send !final)."
             )
 
@@ -480,22 +425,17 @@ def execute_strategy(store, request: ActionRequest, check: StateCheck, normalize
     if request.kind == "gtlist":
         _execute_gtlist(store, request)
         return
-    if request.kind == "legacy":
-        store._command(request.command, request.arg, request.actor.id)
-        return
     raise ValueError(f"Unknown action kind: {request.kind}")
 
 
 def _create_case_and_auto_yes(store, request: ActionRequest, check: StateCheck, normalized_fn, ai_invoked: int) -> int:
-    key = normalized_fn(check.canonical_name)
-    id_key = normalized_fn(check.nominee_id)
     store.db.execute(
         "INSERT OR IGNORE INTO nominees(id, name) VALUES(?, ?)",
         (check.nominee_id, check.canonical_name),
     )
-    store.db.executemany(
+    store.db.execute(
         "INSERT OR IGNORE INTO aliases(alias, nominee_id) VALUES(?, ?)",
-        [(key, check.nominee_id), (id_key, check.nominee_id)],
+        (normalized_fn(check.canonical_name), check.nominee_id),
     )
     case_id = store.db.execute(
         "INSERT INTO cases(nominee_id, nominator, phase, ai_invoked) VALUES(?, ?, 'voting', ?)",
@@ -643,7 +583,7 @@ def _execute_gtstatus(store) -> None:
     winners_count = store.db.execute("SELECT COUNT(*) FROM cases WHERE phase='certified'").fetchone()[0]
     losers_count = store.db.execute("SELECT COUNT(*) FROM denials").fetchone()[0]
     cur = store.current()
-    if cur and cur["phase"] in ("case", "voting"):
+    if cur and cur["phase"] == "voting":
         votes = {
             r["sender_id"]: r["vote"].upper()
             for r in store.db.execute("SELECT sender_id, vote FROM votes WHERE case_id=?", (cur["id"],)).fetchall()
@@ -659,12 +599,12 @@ def _execute_gtstatus(store) -> None:
             photos_tag = "photos ready" if cur["ai_invoked"] else f"!!gt {cur['name']} for photos"
             wait_str = f"; waiting on {', '.join(waiting_parts)}" if waiting_parts else ""
             state_str = (
-                f"Active: {cur['name']} ({len(votes)}/3 — {', '.join(voted_parts) or 'none'}"
+                f"Active: {cur['name']} ({len(votes)}/3 votes: {', '.join(voted_parts) or 'none'}"
                 f"{wait_str}; {photos_tag})"
             )
             cmds_str = "Commands: !!Y | !!N | !!C | !gtlist | !gthelp"
     else:
-        last_str = f" (last: {cur['name']} — {cur['phase'].upper()})" if cur else ""
+        last_str = f" (last: {cur['name']}, {cur['phase'].upper()})" if cur else ""
         state_str = f"No active nomination{last_str}"
         cmds_str = "Commands: !gt Name. Pitch | !!gt Name. Pitch | !gtlist [winners|losers] | !gthelp"
     store.queue(f"{state_str} · Record: {winners_count} certified, {losers_count} denied · {cmds_str}")
@@ -673,7 +613,7 @@ def _execute_gtstatus(store) -> None:
 def _execute_gtlist(store, request: ActionRequest) -> None:
     mode = request.arg.strip().casefold() or "winners"
     cur = store.current()
-    if cur and cur["phase"] in ("case", "voting"):
+    if cur and cur["phase"] == "voting":
         votes_in = store.db.execute("SELECT COUNT(*) FROM votes WHERE case_id=?", (cur["id"],)).fetchone()[0]
         active_str = f"{cur['name']} ({votes_in}/3 votes in)"
     else:

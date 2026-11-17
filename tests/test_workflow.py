@@ -4,7 +4,7 @@ import unittest
 from gentalent.config import Config
 from gentalent.generative import GeneratedMediaBundle
 from gentalent.state import Store
-from gentalent.workflow import ActionRequest, format_nominee_name, split_nominee_and_reason
+from gentalent.workflow import format_nominee_name, split_nominee_and_reason
 
 
 def scenario_config(root):
@@ -21,9 +21,7 @@ def scenario_config(root):
             "beeper_url": "http://localhost:23373",
             "database": "scenario.sqlite3",
             "poll_seconds": 1,
-            "tumblr_blog": "example.tumblr.com",
             "token_file": "unused.token",
-            "tumblr_credentials": "unused.json",
         },
         Path(root),
     )
@@ -301,28 +299,9 @@ class WorkflowTest(unittest.TestCase):
             raw_name, reason = split_nominee_and_reason(raw)
             self.assertEqual((format_nominee_name(raw_name), reason), expected)
 
-    def test_future_classifier_hook_seam(self):
-        calls = []
-
-        def custom_classifier(invocation, actor):
-            calls.append((invocation.keyword, actor.id))
-            return ActionRequest(
-                kind="nominate",
-                actor=actor,
-                year=2026,
-                nominee_name="Custom Resolved Name",
-                reason="Extracted by classifier hook",
-            )
-
-        self.store.classifier = custom_classifier
-        handled, reply, _ = self.send("me", "!gt some natural language pitch")
-        self.assertTrue(handled)
-        self.assertEqual(calls, [("!gt", "me")])
-        self.assertIn("Custom Resolved Name", reply)
-
     def test_gthelp_gtstatus_and_gtlist_never_invoke_ai(self):
-        # 1. !gthelp, !!gthelp, !ghelp, and !!gt help all return concise rules without calling AI or opening a case
-        for cmd in ("!gthelp", "!!gthelp", "!!GTHELP", "!ghelp", "!!ghelp", "!!gt help", "!gt help"):
+        # 1. !gthelp, !!gthelp, and !gt help all return concise rules without calling AI or opening a case
+        for cmd in ("!gthelp", "!!gthelp", "!!GTHELP", "!!gt help", "!gt help"):
             handled, reply, attach = self.send("person1", cmd)
             self.assertTrue(handled)
             self.assertEqual(attach, "")
@@ -332,24 +311,27 @@ class WorkflowTest(unittest.TestCase):
             self.assertIsNone(self.store.current())
             self.assertEqual(self.ai_calls, [])
 
-        # 2. Idle !gtstatus and !gtlist
-        self.store.register("prior:denied", "Prior Denied")
-        self.store.import_denial("prior:denied")
+        # 2. Idle !gtstatus and !gtlist after one real denial
+        self.send("me", "!gt Prior Denied. Pitch.")
+        self.send("person1", "!!n")
+        self.send("person2", "!!y")
+        self.send("me", "!final")
+        self.assertEqual(self.store.current()["phase"], "denied")
 
-        for cmd in ("!gtstatus", "!gstatus"):
+        for cmd in ("!gtstatus",):
             handled, reply, _ = self.send("me", cmd)
             self.assertTrue(handled)
             self.assertIn("No active nomination", reply)
             self.assertIn("0 certified, 1 denied", reply)
             self.assertIn("!gt Name. Pitch", reply)
 
-        for cmd in ("!gtlist", "!glist"):
+        for cmd in ("!gtlist",):
             handled, reply, _ = self.send("me", cmd)
             self.assertTrue(handled)
             self.assertIn("Winners (0): none yet", reply)
             self.assertIn("Current nominee: none", reply)
 
-        for cmd in ("!gtlist losers", "!glist losers"):
+        for cmd in ("!gtlist losers",):
             handled, reply, _ = self.send("me", cmd)
             self.assertTrue(handled)
             self.assertIn("Losers (1): Prior Denied", reply)
@@ -385,3 +367,39 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("Winners (1): Eva Longoria", reply)
         self.assertIn("Current nominee: none", reply)
         self.assertEqual(self.ai_calls, [])
+
+    def test_unrequested_short_aliases_are_not_commands(self):
+        for cmd in ("!ghelp", "!gstatus", "!glist", "!!ghelp", "!glist losers"):
+            self.assertEqual(self.send("person1", cmd), (False, None, ""))
+
+    def test_outsiders_other_chats_and_edited_messages_are_ignored(self):
+        base = {"chatID": "friends-group", "accountID": "gmessages-1", "senderID": "me",
+                "text": "!gt Eva Longoria. Iconic.", "timestamp": "2026-11-16T18:00:00Z"}
+        for n, changes in enumerate(({"senderID": "outsider"}, {"chatID": "another-chat"},
+                                     {"accountID": "another-account"}, {"editedTimestamp": "2026-01-01"},
+                                     {"isDeleted": True}, {"isHidden": True})):
+            self.assertFalse(self.store.handle(dict(base, id=f"ignored-{n}", **changes)))
+        self.assertIsNone(self.store.current())
+
+    def test_replayed_message_is_not_counted_twice_after_restart(self):
+        self.send("me", "!gt Eva Longoria. Iconic.")
+        self.send("person1", "!!y", mid="vote-once")
+        before = self.store.db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]
+        self.store.close()
+        self.store = Store(self.config.path("database"), self.config, clock=lambda: self.now[0])
+        self.assertEqual(self.send("person1", "!!y", mid="vote-once"), (False, None, ""))
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0], before)
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM votes").fetchone()[0], 2)
+
+    def test_denials_cannot_be_deleted_or_changed(self):
+        import sqlite3
+        self.send("me", "!gt Eva Longoria. Iconic.")
+        self.send("person1", "!!n")
+        self.send("person2", "!!y")
+        self.send("me", "!final")
+        for sql in ("DELETE FROM denials", "UPDATE denials SET recorded_at='x'"):
+            with self.assertRaises(sqlite3.IntegrityError):
+                with self.store.db:
+                    self.store.db.execute(sql)
+        _, reply, _ = self.send("person1", "!gt EVA LONGORIA. Again.")
+        self.assertIn("can never be nominated again", reply)

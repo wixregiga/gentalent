@@ -5,12 +5,12 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from gentalent.demo import demo_config
 from gentalent.generative import (
     STRIPPED_API_KEY_VARS,
     SubscriptionAgentRunner,
     subscription_env,
 )
+from support import make_config
 
 
 def _create_test_image(path: Path, color: str):
@@ -25,7 +25,7 @@ def _create_test_image(path: Path, color: str):
 class GenerativeMediaTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.config = demo_config(self.temp.name)
+        self.config = make_config(self.temp.name)
 
     def tearDown(self):
         self.temp.cleanup()
