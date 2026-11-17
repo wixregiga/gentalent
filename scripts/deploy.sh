@@ -4,9 +4,16 @@
 #   mise run deploy                    deploy HEAD
 #   mise run deploy <commit>           deploy, or roll back to, a specific commit
 #   mise run deploy -- --check [ref]   run every check, change nothing
+# Runs only from the main checkout, which owns .live, config.json and the daemons. A real
+# deploy takes only commits already on main (merge with `mise run ship <branch>`).
 set -euo pipefail
 cd "$(dirname "$(realpath "$0")")/.."
 root="$PWD"
+common="$(dirname "$(realpath "$(git rev-parse --git-common-dir)")")"
+if [[ "$root" != "$common" ]]; then
+  echo "Deploy from the main checkout ($common), not a worktree." >&2
+  exit 1
+fi
 
 check_only=""
 if [[ "${1:-}" == "--check" ]]; then
@@ -20,6 +27,10 @@ python="$(python3 -c 'import sys; print(sys.executable)')"
 
 target="$(git rev-parse --verify "${1:-HEAD}^{commit}")"
 echo "Target: $(git log -1 --format='%h %s' "$target")"
+if [[ -z "$check_only" ]] && ! git merge-base --is-ancestor "$target" main; then
+  echo "${target:0:7} is not on main. Merge it first: mise run ship <branch>." >&2
+  exit 1
+fi
 if ! git show "$target:mise.toml" | grep -q '\./\.live/scripts/run-gentalent-live\.sh'; then
   echo "$target predates the pinned .live layout; deploying it would run the working tree." >&2
   exit 1

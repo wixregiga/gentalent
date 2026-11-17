@@ -53,9 +53,12 @@ Two `mise` daemons start at boot (`mise.toml`): `beeper` (the Linux Beeper Deskt
 The bot runs the commit pinned in `.live/`, a git worktree. **Editing files does not change
 the live bot.** Only a deploy does:
 
-    mise run deploy                  # deploy HEAD
-    mise run deploy <commit>         # deploy, or roll back to, an earlier commit
-    mise run deploy -- --check       # run every check, change nothing
+    mise run ship <branch>           # fast-forward main to a branch, then deploy it
+    mise run deploy                  # deploy main
+    mise run deploy <commit>         # roll back to an earlier commit on main
+    mise run deploy -- --check <ref> # run every check on any commit, change nothing
+
+All of these run from the main checkout only, and a real deploy takes only commits on `main`.
 
 A deploy runs the tests in a scratch checkout and `doctor --contract` against the real
 Beeper API. It refuses while the bot is mid-operation (a `!!gt` photo search holds the
@@ -75,6 +78,11 @@ Day to day:
 `gentalent status` opens the database read-only and is safe while the bot runs. Use it,
 not a database viewer on Windows: recent changes sit in `.state/gentalent.sqlite3-wal`,
 which a viewer opened over `\\wsl.localhost` may not see.
+
+## Working on it
+
+Each change gets its own worktree (`mise run worktree feature/<name>`) and ships from the
+main checkout with `mise run ship feature/<name>`. See [AGENTS.md](AGENTS.md).
 
 ## When a reply is uncertain
 

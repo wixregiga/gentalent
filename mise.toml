@@ -30,6 +30,24 @@ proxy = false
 description = "Run GenTalent unit tests"
 run = "python3 -m unittest discover -s tests -v"
 
+[tasks.worktree]
+description = "New worktree for a branch: mise run worktree <type>/<name>"
+run = "./scripts/new-worktree"
+
+[tasks.ship]
+description = "From the main checkout: fast-forward main to a branch, then deploy it"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+branch="${1:?usage: mise run ship <branch>}"
+if [[ "$(git rev-parse --abbrev-ref HEAD)" != main ]]; then
+  echo "Run ship from the main checkout, with main checked out." >&2
+  exit 1
+fi
+git merge --ff-only "$branch"
+mise run deploy
+'''
+
 [tasks.deploy]
 description = "Test a commit (default HEAD), pin .live to it, restart the live bot"
 run = "./scripts/deploy.sh"

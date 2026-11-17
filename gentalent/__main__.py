@@ -9,7 +9,9 @@ from urllib.parse import quote
 from .config import Config
 from .net import Beeper, APIError, secret_write
 from .feedback import entries as feedback_entries
-from .runner import arm, contract_report, lock_database, open_unlocked, resolve_send, run, status_report
+from contextlib import nullcontext
+from .runner import (arm, contract_report, lock_database, lock_live_chat, open_unlocked, resolve_send, run,
+                     status_report)
 from .state import Store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -172,7 +174,8 @@ def main(argv=None):
         finally:
             db.close()
         return 0
-    with lock_database(path):
+    live_run = args.command == "run" and args.live
+    with lock_live_chat(config) if live_run else nullcontext(), lock_database(path):
         store = Store(path, config)
         try:
             if args.command == "arm":

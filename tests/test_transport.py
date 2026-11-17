@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 import io
+import os
 from contextlib import redirect_stdout
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -10,7 +11,7 @@ import unittest
 from urllib.parse import unquote, urlsplit
 from gentalent.config import Config
 from gentalent.net import Beeper, APIError, secret_write
-from gentalent.runner import arm, poll_once, flush, new_messages, lock_database
+from gentalent.runner import arm, poll_once, flush, new_messages, lock_database, lock_live_chat
 from gentalent.state import Store
 from support import make_config, message
 
@@ -106,6 +107,18 @@ class TransportTest(unittest.TestCase):
         data = dict(self.config.data, chat_id="another-chat")
         with self.assertRaises(ValueError):
             Store(self.config.path("database"), Config(data, self.config.root))
+
+    def test_one_live_bot_per_group_across_checkouts(self):
+        # A worktree has its own root and database, but the same group: still refused.
+        other_checkout = Config(dict(self.config.data, database="other.sqlite3"), Path(self.temp.name) / "wt")
+        os.environ["XDG_STATE_HOME"] = str(Path(self.temp.name) / "state")
+        self.addCleanup(os.environ.pop, "XDG_STATE_HOME")
+        with lock_live_chat(self.config):
+            with self.assertRaises(ValueError):
+                with lock_live_chat(other_checkout):
+                    pass
+            with lock_live_chat(Config(dict(self.config.data, chat_id="another-chat"), self.config.root)):
+                pass  # a different group is not blocked
 
     def test_http_protocol_exact_scope_and_no_cross_chat_send(self):
         state = {"foreign": False, "posts": [], "uploads": []}

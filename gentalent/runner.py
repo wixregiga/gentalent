@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import fcntl
+import os
 from pathlib import Path
 import sqlite3
 import time
@@ -23,18 +24,30 @@ def fresh(message, after):
 
 
 @contextmanager
-def lock_database(path):
-    path = Path(str(path) + ".lock")
+def _exclusive(path, busy_message):
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise ValueError("Another GenTalent operation is using this database.") from None
+            raise ValueError(busy_message) from None
         try:
             yield
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def lock_database(path):
+    return _exclusive(str(path) + ".lock", "Another GenTalent operation is using this database.")
+
+
+def lock_live_chat(config):
+    """One live bot per group on this machine, whatever checkout, worktree or database it runs
+    from. Two would both reply to every command. The lock lives outside any checkout."""
+    state = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
+    return _exclusive(state / "gentalent" / f"live-{config.binding[:16]}.lock",
+                      "A live GenTalent bot is already running for this group on this machine.")
 
 
 def arm(store, api):
