@@ -40,18 +40,25 @@ class WorkflowTest(unittest.TestCase):
             out_dir.mkdir(parents=True, exist_ok=True)
             strip = out_dir / "strip.jpg"
             strip.write_bytes(b"fake-strip-jpeg")
+            photos = []
+            for n in (1, 2, 3):
+                photo = out_dir / f"0{n}_fake.jpg"
+                photo.write_bytes(b"fake-photo")
+                photos.append(photo)
             sources = out_dir / "SOURCES.txt"
             sources.write_text("fake sources")
             return GeneratedMediaBundle(
                 nominee_name=name,
                 summary="Representative photos gathered.",
                 artifact_dir=out_dir,
-                photo_paths=[],
+                photo_paths=photos,
                 strip_path=strip,
                 sources_path=sources,
                 provider_used="codex:gpt-6.1-sol",
             )
 
+        self.fake_media = fake_media
+        self.photos = []
         self.store = Store(
             self.config.path("database"),
             self.config,
@@ -77,13 +84,25 @@ class WorkflowTest(unittest.TestCase):
             "isSender": sender == "me",
         }
         handled = self.store.handle(event)
-        after = self.store.db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]
-        reply = None
-        if after > before:
-            reply = self.store.db.execute(
-                "SELECT text, attachment_path FROM outbox ORDER BY rowid DESC LIMIT 1"
-            ).fetchone()
+        rows = self.store.db.execute(
+            "SELECT text, attachment_path, kind FROM outbox ORDER BY rowid LIMIT -1 OFFSET ?", (before,)
+        ).fetchall()
+        # Photo-only messages that followed the reply, in send order.
+        self.photos = [Path(r["attachment_path"]).name for r in rows if r["kind"] == "photo"]
+        replies = [r for r in rows if r["kind"] != "photo"]
+        reply = replies[-1] if replies else None
         return handled, (reply["text"] if reply else None), (reply["attachment_path"] if reply else "")
+
+    def use_layout(self, layout):
+        self.store.close()
+        self.config = Config(dict(self.config.data, photo_layout=layout), self.config.root)
+        self.store = Store(self.config.path("database"), self.config,
+                           media_generator=self.fake_media, clock=lambda: self.now[0])
+
+    def verdict(self):
+        return self.store.db.execute(
+            "SELECT text, attachment_path FROM outbox WHERE kind='verdict' ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()
 
     def test_eva_longoria_scenario_and_final_command(self):
         handled, reply, attach = self.send(
@@ -239,7 +258,8 @@ class WorkflowTest(unittest.TestCase):
         )
         self.assertTrue(handled)
         self.assertIn("Welvin Harris", reply)
-        self.assertTrue(attach.endswith("strip.jpg"))
+        self.assertEqual(attach, "")
+        self.assertEqual(self.photos, ["01_fake.jpg", "02_fake.jpg", "03_fake.jpg"])
         self.assertEqual(len(self.ai_calls), 1)
 
         # Calling !!gt again for the active nominee does NOT invoke AI a second time
@@ -266,7 +286,8 @@ class WorkflowTest(unittest.TestCase):
         handled, reply, attach = self.send("person1", "!!gt Welvin Harris. Add photos.")
         self.assertTrue(handled)
         self.assertIn("Added 3 representative photos", reply)
-        self.assertTrue(attach.endswith("strip.jpg"))
+        self.assertEqual(attach, "")
+        self.assertEqual(self.photos, ["01_fake.jpg", "02_fake.jpg", "03_fake.jpg"])
         self.assertEqual(len(self.ai_calls), 1)
 
         # Second !!gt does NOT invoke AI again
@@ -403,3 +424,53 @@ class WorkflowTest(unittest.TestCase):
                     self.store.db.execute(sql)
         _, reply, _ = self.send("person1", "!gt EVA LONGORIA. Again.")
         self.assertIn("can never be nominated again", reply)
+
+    def finish(self, *votes):
+        for sender, vote in zip(("person1", "person2"), votes):
+            self.send(sender, vote)
+        self.send("me", "!final")
+
+    def test_individual_layout_puts_the_strip_on_the_verdict(self):
+        self.send("me", "!!gt Eva Longoria. Iconic.")
+        self.finish("!!y", "!!y")
+        row = self.verdict()
+        self.assertIn("Congratulations Eva Longoria", row["text"])
+        self.assertTrue(row["attachment_path"].endswith("strip.jpg"))
+
+    def test_individual_layout_puts_the_strip_on_a_denial_too(self):
+        self.send("me", "!!gt Eva Longoria. Iconic.")
+        self.finish("!!n", "!!y")
+        self.assertTrue(self.verdict()["attachment_path"].endswith("strip.jpg"))
+
+    def test_verdict_has_no_photo_when_none_were_generated(self):
+        self.send("me", "!gt Eva Longoria. Iconic.")
+        self.finish("!!y", "!!y")
+        self.assertEqual(self.verdict()["attachment_path"], "")
+        self.assertEqual(self.ai_calls, [])
+
+    def test_verdict_has_no_photo_when_the_strip_file_is_gone(self):
+        self.send("me", "!!gt Eva Longoria. Iconic.")
+        (Path(self.temp.name) / "media" / "fake" / "strip.jpg").unlink()
+        self.finish("!!y", "!!y")
+        self.assertEqual(self.verdict()["attachment_path"], "")
+
+    def test_stitched_layout_attaches_the_strip_to_the_nomination_only(self):
+        self.use_layout("stitched")
+        _, reply, attach = self.send("me", "!!gt Eva Longoria. Iconic.")
+        self.assertIn("would like to nominate Eva Longoria", reply)
+        self.assertTrue(attach.endswith("strip.jpg"))
+        self.assertEqual(self.photos, [])
+        self.finish("!!y", "!!y")
+        self.assertEqual(self.verdict()["attachment_path"], "")
+
+    def test_photo_messages_have_no_text_and_follow_the_nomination(self):
+        self.send("me", "!!gt Eva Longoria. Iconic.")
+        rows = self.store.db.execute("SELECT text, kind FROM outbox ORDER BY rowid").fetchall()
+        self.assertEqual([r["kind"] for r in rows], ["reply", "photo", "photo", "photo"])
+        self.assertTrue(rows[0]["text"].startswith("@gentalent-bot says:"))
+        self.assertEqual([r["text"] for r in rows[1:]], ["", "", ""])
+
+    def test_unknown_photo_layout_is_rejected(self):
+        data = dict(self.config.data, photo_layout="grid", members=self.config.data["members"])
+        with self.assertRaises(ValueError):
+            Config(data, self.config.root).photo_layout

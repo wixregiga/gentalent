@@ -24,6 +24,7 @@
   "token_file": "~/.config/gentalent/beeper.token",
   "poll_seconds": 3,
   "media_dir": ".state/media",
+  "photo_layout": "individual",
   "ai_providers": [
     {"cli": "codex", "model": "gpt-6.1-sol"},
     {"cli": "claude", "model": "sonnet"},

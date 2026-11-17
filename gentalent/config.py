@@ -5,6 +5,9 @@ import json
 from urllib.parse import urlsplit
 
 PREFIX = "@gentalent-bot says:"
+# individual: nomination text, then each photo as its own message; the stitched strip
+# rides on the verdict. stitched: one strip attached to the nomination, as before.
+PHOTO_LAYOUTS = ("individual", "stitched")
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,13 @@ class Config:
     def path(self, key):
         p = Path(self.data[key]).expanduser()
         return p if p.is_absolute() else self.root / p
+
+    @property
+    def photo_layout(self):
+        value = self.data.get("photo_layout", "individual")
+        if value not in PHOTO_LAYOUTS:
+            raise ValueError(f"photo_layout must be one of: {', '.join(PHOTO_LAYOUTS)}.")
+        return value
 
     @property
     def roster(self):
@@ -45,6 +55,7 @@ class Config:
             raise ValueError("The owner must be in the three-person roster.")
         if any(m.get("platform") not in ("android", "iphone", "unknown") for m in members):
             raise ValueError("Confirm each member's platform: android, iphone, or unknown.")
+        self.photo_layout
         if not 1 <= float(d.get("poll_seconds", 3)) <= 3600:
             raise ValueError("poll_seconds must be between 1 and 3600.")
 

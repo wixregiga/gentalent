@@ -12,7 +12,7 @@ Replies come from the account paired with Beeper, prefixed `@gentalent-bot says:
 | Command | Effect |
 |---|---|
 | `!gt Name. Pitch` | Nominate. The nominator's vote counts as yes (1/3). |
-| `!!gt Name. Pitch` | Nominate with three AI-found photos. Runs AI at most once per nominee. |
+| `!!gt Name. Pitch` | Nominate with three AI-found photos (see Photos below). Runs AI at most once per nominee. |
 | `!!Y` / `!!N` / `!!C` (or `!!yes`, `!!no`, `!!clear`) | Vote, change your vote, or clear it, until the third vote is in. |
 | `!final` | Nominator only, once all three votes are in. Otherwise the result posts after one minute. |
 | `!gthelp` or `!!gthelp` | Rules and commands. Never runs AI. |
@@ -21,6 +21,18 @@ Replies come from the account paired with Beeper, prefixed `@gentalent-bot says:
 
 Messages from outside the configured group and roster, and edited, deleted or hidden
 messages, are ignored, as are the bot's own replies.
+
+## Photos
+
+`photo_layout` in `config.json` picks how `!!gt` photos appear:
+
+- `individual` (default): the nomination text, then each photo as its own message. When the
+  vote finishes, the verdict (certified or denied) carries all three stitched into one image.
+- `stitched`: one stitched image attached to the nomination, nothing on the verdict.
+
+The AI search is the same either way; it always saves three photos and the stitched strip.
+Changing the setting needs a restart (`mise daemons restart gentalent`), not a deploy.
+Restart when no `!!gt` photo search is running, or that search starts over.
 
 ## How it runs
 

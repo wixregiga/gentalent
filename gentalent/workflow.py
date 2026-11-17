@@ -496,7 +496,12 @@ def _execute_generative_nominate(store, request: ActionRequest, check: StateChec
             "INSERT INTO exhibits(case_id, text) VALUES(?, ?)",
             (case_id, exhibit_text),
         )
-        store.queue(base_msg, attachment_path=str(bundle.strip_path), case_id=case_id)
+        if store.config.photo_layout == "stitched":
+            store.queue(base_msg, attachment_path=str(bundle.strip_path), case_id=case_id)
+        else:
+            store.queue(base_msg, case_id=case_id)
+            for photo in bundle.photo_paths:
+                store.queue_photo(photo, case_id)
     except Exception as exc:
         fallback = (
             f"Could not generate photos for {check.canonical_name} right now ({exc}). "

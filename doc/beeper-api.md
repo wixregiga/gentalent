@@ -15,7 +15,7 @@ Two checks guard these assumptions:
 - `python3 -m gentalent doctor --contract` reads the live spec and the three newest
   delivered replies from Beeper, and fails if items 1 to 3 no longer hold. It is
   read-only, and `mise run deploy` runs it before every restart.
-- `tests/test_beeper_contract.py` replays items 3 to 6 through the send code using the
+- `tests/test_beeper_contract.py` replays items 3 to 5 and 7 through the send code using the
   captured response shapes. It proves the code handles them; it cannot notice Beeper
   changing.
 
@@ -38,20 +38,26 @@ Two checks guard these assumptions:
    lists 404 as a possible response but says nothing about expiry). GenTalent marks that
    reply `uncertain` and never resends it. A person checks the thread and records the
    outcome with `resolve-send`.
-6. **Observed.** A reply with a photo arrives as two messages: an `IMAGE` message
+6. **Documented.** The send body has no required fields, and `attachment` is a "Single
+   attachment to send with the message". So a photo can be sent with no text, and three
+   photos take three sends. GenTalent's `individual` photo layout relies on both.
+   **Not yet observed:** a photo-only send through the Google Messages bridge. The first
+   `!!gt` after deploying is the first real test; a rejected photo is marked `failed` and
+   never resent, and the nomination text is a separate message, so it still arrives.
+7. **Observed.** A reply with a photo arrives as two messages: an `IMAGE` message
    (`attachments[].fileName == "strip.jpg"`, no `text` key), then a separate `TEXT`
    message. The pending ID resolves to the `IMAGE` message.
 
 ## Reading the group
 
-7. **Documented.** `GET /v1/chats/{chatID}/messages` pages with an opaque `cursor` and
+8. **Documented.** `GET /v1/chats/{chatID}/messages` pages with an opaque `cursor` and
    `direction`. Without a cursor it returns the newest page (20 items in this group).
-8. **Observed.** The bot sends as the paired account, so its replies, and your own
+9. **Observed.** The bot sends as the paired account, so its replies, and your own
    messages from the phone or desktop app, all carry your sender ID with `isSender: true`.
    The bot tells its own replies apart by the `@gentalent-bot says:` prefix and by
    recorded pending and final IDs.
-9. **Observed.** Messages from friends' phones show `sendStatus` absent and their own
-   bridge sender IDs. Nobody needs the Beeper app on a phone.
+10. **Observed.** Messages from friends' phones show `sendStatus` absent and their own
+    bridge sender IDs. Nobody needs the Beeper app on a phone.
 
 ## Failure history (2026-11-16)
 

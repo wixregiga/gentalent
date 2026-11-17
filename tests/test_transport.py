@@ -162,10 +162,15 @@ class TransportTest(unittest.TestCase):
                 self.assertIn("multipart/form-data", state["uploads"][0][0])
                 self.assertIn(b"fakejpeg", state["uploads"][0][1])
                 self.assertEqual(state["posts"][1]["attachment"]["uploadID"], "up-123")
+                self.assertEqual(api.send("", attachment_path=str(strip)), "p1")
+                self.assertNotIn("text", state["posts"][2], "a photo-only send omits text")
+                self.assertEqual(state["posts"][2]["attachment"]["fileName"], "strip.jpg")
+                with self.assertRaises(ValueError):
+                    api.send("")
                 state["foreign"] = True
                 with self.assertRaises(APIError):
                     api.send("must not be sent")
-                self.assertEqual(len(state["posts"]), 2)
+                self.assertEqual(len(state["posts"]), 3)
             finally:
                 server.shutdown()
                 worker.join()

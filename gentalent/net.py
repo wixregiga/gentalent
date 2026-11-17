@@ -140,8 +140,10 @@ class Beeper:
         return result["uploadID"]
 
     def send(self, text, attachment_path=None):
+        if not text and not attachment_path:
+            raise ValueError("A message needs text, an attachment, or both.")
         self.verify_chat()
-        body = {"text": text}
+        body = {"text": text} if text else {}
         if attachment_path:
             path = Path(attachment_path)
             upload_id = self.upload_asset(path)

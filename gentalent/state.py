@@ -4,6 +4,7 @@ import time
 import unicodedata
 import uuid
 from .config import PREFIX
+from .generative import STRIP_FILENAME
 from .workflow import check_keyword, parse_action, check_state, execute_strategy
 
 
@@ -83,14 +84,28 @@ class Store:
         ).fetchone()
 
     def queue(self, text, kind="reply", attachment_path="", case_id=None):
+        return self._enqueue(f"{PREFIX} {text}", kind, attachment_path, case_id)
+
+    def queue_photo(self, path, case_id):
+        """A photo with no text. The send spec makes text optional and allows one attachment."""
+        return self._enqueue("", "photo", path, case_id)
+
+    def _enqueue(self, text, kind, attachment_path, case_id):
         key = uuid.uuid4().hex[:12]
         self.db.execute(
             "INSERT INTO outbox(id,text,status,kind,attachment_path,case_id) VALUES(?,?,?,?,?,?)",
-            (key, f"{PREFIX} {text}", "queued", kind, str(attachment_path or ""), case_id),
+            (key, text, "queued", kind, str(attachment_path or ""), case_id),
         )
         if case_id is not None:
             self.db.execute("UPDATE cases SET messages_sent = messages_sent + 1 WHERE id=?", (case_id,))
         return key
+
+    def verdict_photo(self, case):
+        """In individual layout, the stitched strip goes with the verdict if photos were made."""
+        if self.config.photo_layout != "individual" or not case["ai_invoked"] or not case["ai_artifact_dir"]:
+            return ""
+        strip = Path(case["ai_artifact_dir"]) / STRIP_FILENAME
+        return str(strip) if strip.is_file() else ""
 
     def generate_media(self, nominee_name, pitch=""):
         if self.media_generator is None:
@@ -113,6 +128,7 @@ class Store:
             self.queue(
                 f"Congratulations {row['name']}! You are officially a Generational Talent!",
                 kind="verdict",
+                attachment_path=self.verdict_photo(row),
                 case_id=case_id,
             )
         else:
@@ -123,6 +139,7 @@ class Store:
                 f"{row['name']} did not receive a unanimous vote ({yes_count}/3 yes) "
                 f"and is permanently denied from Generational Talent.",
                 kind="verdict",
+                attachment_path=self.verdict_photo(row),
                 case_id=case_id,
             )
         return True

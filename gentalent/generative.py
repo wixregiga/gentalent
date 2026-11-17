@@ -8,6 +8,8 @@ import subprocess
 import tempfile
 from typing import Any, Callable, Optional
 
+STRIP_FILENAME = "strip.jpg"
+
 STRIPPED_API_KEY_VARS = (
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
@@ -218,7 +220,7 @@ def build_media_bundle(
             raise RuntimeError(f"Failed optimizing photo {idx}: {res.stderr.strip()}")
         photo_paths.append(dst_path)
 
-    strip_path = out_dir / "strip.jpg"
+    strip_path = out_dir / STRIP_FILENAME
     with tempfile.TemporaryDirectory(prefix="gentalent-strip-") as tmpdir:
         tiles: list[Path] = []
         for idx, p_path in enumerate(photo_paths, start=1):
