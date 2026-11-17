@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 type Incoming struct {
 	ID       string
@@ -43,4 +46,14 @@ type Reaction struct {
 type Group struct {
 	ChatID, AccountID, Owner string
 	Members                  []string
+}
+
+func (g Group) Accepts(message Message, armedAt time.Time) bool {
+	return message.ID != "" && message.ChatID == g.ChatID && message.AccountID == g.AccountID &&
+		g.HasMember(message.Sender) && !message.Edited && !message.Hidden && !message.Deleted &&
+		!message.SentAt.IsZero() && !message.SentAt.Before(armedAt)
+}
+
+func (g Group) HasMember(sender string) bool {
+	return slices.Contains(g.Members, sender)
 }

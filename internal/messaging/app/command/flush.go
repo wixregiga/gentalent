@@ -40,6 +40,9 @@ func (f Flusher) deliver(ctx context.Context, reply domain.Reply) error {
 	message, err := f.Reader.Retrieve(ctx, reply.PendingID)
 	switch {
 	case errors.Is(err, port.ErrMessageMissing):
+		if f.Log != nil {
+			f.Log.WarnContext(ctx, "pending reply no longer resolves; check the thread, then use resolve-send", "key", reply.Key, "error", err)
+		}
 		return f.record(ctx, reply, domain.Uncertain, "")
 	case err != nil:
 		return err
@@ -75,6 +78,9 @@ func (f Flusher) record(ctx context.Context, reply domain.Reply, state domain.St
 	changed, err := f.Store.Transition(ctx, reply.Key, reply.State, state, id)
 	if err != nil {
 		return fmt.Errorf("record %s for reply %s: %w", state, reply.Key, err)
+	}
+	if !changed && reply.State == domain.Sending {
+		return fmt.Errorf("reply %s changed while recording %s", reply.Key, state)
 	}
 	if changed && f.Log != nil {
 		f.Log.InfoContext(ctx, "reply delivery", "key", reply.Key, "status", state, "message", id)

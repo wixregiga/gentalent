@@ -46,10 +46,10 @@ func (s *Store) Transition(ctx context.Context, key string, from, to domain.Stat
 		pending_id=CASE WHEN ?='pending' THEN ? ELSE pending_id END,
 		final_id=CASE WHEN ? IN ('sent','failed') AND ?<>'' THEN ? ELSE final_id END
 		WHERE key=? AND status=?
-		AND (?<>'sent' OR ?='' OR NOT EXISTS (
+		AND (? NOT IN ('uncertain','failed') OR ?<>'sent' OR ?='' OR NOT EXISTS (
 			SELECT 1 FROM outbox other WHERE other.final_id=? AND other.key<>?
 		))
-	`, to, to, id, to, id, id, key, from, to, id, id, key)
+	`, to, to, id, to, id, id, key, from, from, to, id, id, key)
 	if err != nil {
 		return false, err
 	}
@@ -85,6 +85,10 @@ func (s *Store) replies(ctx context.Context, statement string, args ...any) ([]d
 		return nil, err
 	}
 	defer rows.Close()
+	return scanReplies(rows)
+}
+
+func scanReplies(rows *sql.Rows) ([]domain.Reply, error) {
 	replies := []domain.Reply{}
 	for rows.Next() {
 		var reply domain.Reply

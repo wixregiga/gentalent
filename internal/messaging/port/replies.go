@@ -21,10 +21,16 @@ type ResolutionStore interface {
 	Transition(context.Context, string, domain.State, domain.State, string) (bool, error)
 }
 
-type ReplyReader interface {
-	RecentSent(context.Context, int) ([]domain.Reply, error)
+type TaggedReplyReader interface {
 	TaggedMessage(context.Context, string) (string, error)
-	ReplyStatus(context.Context) (ReplyStatus, error)
+}
+
+type SentReplyReader interface {
+	RecentSent(context.Context, int) ([]domain.Reply, error)
+}
+
+type ReplyStatusReader interface {
+	UncertainReplies(context.Context) (ReplyStatus, error)
 }
 
 type ReplyStatus struct {
