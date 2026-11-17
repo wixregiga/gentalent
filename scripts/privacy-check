@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Block personal data and secrets with gitleaks.
+#   --staged    what is about to be committed (pre-commit hook)
+#   --unpushed  commits on no remote yet (pre-push hook)
+#   --all       every commit on every local branch (mise run privacy)
+# Rules: the owner's private ~/.config/gitleaks/personal.toml when present (it lists the
+# personal data itself, so it never lives in a repo), otherwise this repo's .gitleaks.toml.
+# To keep one line on purpose, end it with the comment: gitleaks:allow
+set -euo pipefail
+config="$HOME/.config/gitleaks/personal.toml"
+[[ -f "$config" ]] || config="$(git rev-parse --show-toplevel)/.gitleaks.toml"
+scan=(gitleaks git --no-banner --redact --config "$config")
+case "${1:-}" in
+  --staged) exec "${scan[@]}" --pre-commit --staged ;;
+  --unpushed) exec "${scan[@]}" --log-opts="HEAD --not --remotes" ;;
+  --all) exec "${scan[@]}" --log-opts="--branches" ;;
+  *) echo "usage: scripts/privacy-check --staged | --unpushed | --all" >&2; exit 2 ;;
+esac

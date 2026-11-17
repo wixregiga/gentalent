@@ -30,9 +30,9 @@ proxy = false
 description = "Run GenTalent unit tests"
 run = "python3 -m unittest discover -s tests -v"
 
-[tasks.worktree]
-description = "New worktree for a branch: mise run worktree <type>/<name>"
-run = "./scripts/new-worktree"
+[tasks.privacy]
+description = "Scan every commit on every local branch for personal data and secrets"
+run = "./scripts/privacy-check --all"
 
 [tasks.ship]
 description = "From the main checkout: fast-forward main to a branch, then deploy it"

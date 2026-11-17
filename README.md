@@ -81,8 +81,9 @@ which a viewer opened over `\\wsl.localhost` may not see.
 
 ## Working on it
 
-Each change gets its own worktree (`mise run worktree feature/<name>`) and ships from the
-main checkout with `mise run ship feature/<name>`. See [AGENTS.md](AGENTS.md).
+Changes happen in T3 Code worktree threads and ship from the main checkout with
+`mise run ship <branch>`. Commits and pushes are scanned for personal data and secrets
+(`lefthook install` once per clone). See [AGENTS.md](AGENTS.md).
 
 ## When a reply is uncertain
 

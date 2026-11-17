@@ -1,0 +1,9 @@
+# Personal data and secrets never reach a commit or a push: see scripts/privacy-check.
+pre-commit:
+  commands:
+    privacy:
+      run: scripts/privacy-check --staged
+pre-push:
+  commands:
+    privacy:
+      run: scripts/privacy-check --unpushed

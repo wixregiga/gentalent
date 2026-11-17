@@ -1,0 +1,4 @@
+# Default secret rules. The owner's personal-data rules live outside the repo
+# (~/.config/gitleaks/personal.toml) and take precedence when present.
+[extend]
+useDefault = true

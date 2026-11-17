@@ -10,21 +10,20 @@ A live bot in a real three-person group chat. Read `README.md` for what it does,
 |---|---|
 | `~/ai/gentalent` (main checkout, branch `main`) | Owns `config.json`, `.state/` (live ballot, backups, media, GIF bank), `.live/`, and the `mise` daemons. Ship and deploy only from here. |
 | `~/ai/gentalent/.live` (detached worktree) | The commit the live bot runs. Only `scripts/deploy.sh` moves it. |
-| `~/ai/worktrees/gentalent/<name>-<type>` | One worktree per piece of work, branch `<type>/<name>`. |
+| T3 Code worktrees | One per thread. T3 creates the worktree and branch. |
 
 Editing files anywhere never changes the live bot; only a deploy does.
 
 ## Workflow
 
-1. `mise run worktree feature/<name>` (or `scripts/new-worktree feature/<name>`). It branches
-   from `main`, creates the worktree beside the main checkout, and trusts its `mise.toml`.
-2. Work and commit in that worktree. `mise run test` needs no config or network.
-3. From the main checkout: `mise run ship feature/<name>`. It fast-forwards `main`, tests the
+1. Work and commit in the thread's worktree, branched from `main`. `mise run test` needs no
+   config or network.
+2. From the main checkout: `mise run ship <branch>`. It fast-forwards `main`, tests the
    commit in a scratch checkout, runs `doctor --contract` against the real Beeper API,
    refuses while the bot is mid-operation, backs up the ballot, pins `.live`, restarts only
    the bot, and rolls back if it does not stay up. Shipping changes what friends see in the
    chat: do it only when the owner asks.
-4. `mise run deploy -- --check <commit>` runs every check without changing anything.
+3. `mise run deploy -- --check <commit>` runs every check without changing anything.
 
 Branches ship by fast-forward, so rebase onto `main` before shipping if `main` moved.
 
@@ -38,7 +37,10 @@ Branches ship by fast-forward, so rebase onto `main` before shipping if `main` m
 - Run `mise daemons restart`: it also restarts the Beeper app. Deploys stop and start only the bot.
 - Send messages into the group to test something without the owner's go-ahead.
 - Commit personal data: friends' names or phone IDs, account IDs, chat IDs, the owner's
-  username or email. Tests use fictional names; real captured shapes get placeholder IDs.
+  username, home path or email. Tests use fictional names; real captured shapes get
+  placeholder IDs. The lefthook pre-commit and pre-push hooks enforce this with gitleaks
+  (`scripts/privacy-check`); `mise run privacy` scans all history. Mark a line
+  `gitleaks:allow` only when the owner explicitly asks to keep that data.
 
 ## Code
 
