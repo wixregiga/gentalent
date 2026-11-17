@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/docs/schemas/rules.arclint.schema.json
+# ArcLint architecture contracts.
+# Grow this file zone by zone: declare real Zones under `zones`,
+# then state what each may import under `rules`.
+# Query commands: arclint rules [selector] · arclint context <path>
+
+runtime: [py]
+
+scan:
+  # error | warn | ignore for imports that classify neither stdlib,
+  # internal, nor declared in the dependency manifest.
+  unknown_imports: warn
+  # Git-ignored runtime copies and data. ArcLint walks ignored paths, and the
+  # main checkout's .live/ holds a second full copy of the code.
+  exclude:
+    - ".live/**"
+    - ".state/**"
+    - "welven_da_great_text/**"
+    - ".venv/**"
+
+domain:
+  # The file this repository writes its Ubiquitous Language in, YAML (.yaml, .yml) or CML (.cml).
+  file: domain.arclint.yaml
+
+zones:
+  # A Zone is a name and the paths it owns: one glob, a list of globs,
+  # or {paths, description}. Split into real Zones as the architecture
+  # takes shape.
+  source: "**"
+
+rules:
+  # Every Rule has an id, the Zone(s) it judges under `on`, and exactly
+  # one constraint: imports, structure, naming, content, layers,
+  # imported_by, independent, acyclic, or uses.
+  source/dependencies:
+    rationale: "Source imports no other declared Zone."
+    on: source
+    imports:
+      # An allow-list of other declared Zones. Empty means this Zone
+      # may import no other declared Zone; with one Zone this is
+      # vacuously true and starts binding the moment you split Zones.
+      internal: []
+
+  source/no-comments:
+    rationale: "Code carries its meaning in names, types, and tests; comments drift from the code they describe, and lint or type-checker suppressions hide what should be fixed. Compiler directives, license identifiers, and generated files stay. A comment or suppression about something we cannot change stays only through a keep entry that records the proof. Judges Go only: the Python tree is being replaced, and the Go tree starts clean."
+    files: ["**/*.go"]
+    uses: source/no-comments

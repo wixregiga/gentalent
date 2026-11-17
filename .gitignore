@@ -53,3 +53,6 @@ mise.*.local.toml
 .DS_Store
 Thumbs.db
 *:Zone.Identifier
+
+# ArcLint run cache
+.arclint/cache/
