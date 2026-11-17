@@ -27,7 +27,7 @@ var (
 
 func newGroup(t *testing.T, settings domain.Settings, history ...domain.Nomination) *domain.Group {
 	t.Helper()
-	group, err := domain.NewGroup(domain.GroupSnapshot{ID: "group-test", Nominations: history}, members, settings)
+	group, err := domain.NewGroup("group-test", members, settings, history, nil)
 	if err != nil {
 		t.Fatalf("NewGroup: %v", err)
 	}
@@ -64,7 +64,7 @@ func finalized(number domain.NominationNumber, person domain.Person, status doma
 func candidates(people ...domain.Person) []domain.Candidate {
 	list := make([]domain.Candidate, 0, len(people))
 	for _, person := range people {
-		list = append(list, domain.Candidate{Person: person, Pitch: "A pitch for " + person.Name})
+		list = append(list, domain.Candidate{Person: person.ID, Name: person.Name, Pitch: "A pitch for " + person.Name})
 	}
 	return list
 }
@@ -81,24 +81,25 @@ func refusal(t *testing.T, err error, rule domain.Rule) domain.Refusal {
 	return refused
 }
 
-func numbers(nominations []domain.Nomination) []domain.NominationNumber {
-	list := make([]domain.NominationNumber, 0, len(nominations))
-	for _, nomination := range nominations {
-		list = append(list, nomination.Number)
-	}
-	return list
-}
-
-func wantNumbers(t *testing.T, got []domain.Nomination, want ...domain.NominationNumber) {
+func wantNumbers(t *testing.T, got []domain.NominationNumber, want ...domain.NominationNumber) {
 	t.Helper()
-	if !slices.Equal(numbers(got), want) {
-		t.Fatalf("want Nominations %v, got %v", want, numbers(got))
+	if !slices.Equal(got, want) {
+		t.Fatalf("want Nominations %v, got %v", want, got)
 	}
 }
 
-func wantUnchanged(t *testing.T, group *domain.Group, before domain.GroupSnapshot) {
+type state struct {
+	nominations []domain.Nomination
+	shames      []domain.Shame
+}
+
+func snapshot(group *domain.Group) state {
+	return state{group.Nominations(), group.Shames()}
+}
+
+func wantUnchanged(t *testing.T, group *domain.Group, before state) {
 	t.Helper()
-	if after := group.Snapshot(); !reflect.DeepEqual(before, after) {
+	if after := snapshot(group); !reflect.DeepEqual(before, after) {
 		t.Fatalf("a refused command changed the Group:\nbefore %+v\nafter  %+v", before, after)
 	}
 }
@@ -114,7 +115,7 @@ func nomination(t *testing.T, group *domain.Group, number domain.NominationNumbe
 
 func TestNominationLimitNotLessThanOne(t *testing.T) {
 	valid := domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 1}
-	if _, err := domain.NewGroup(domain.GroupSnapshot{ID: "group-test"}, members, valid); err != nil {
+	if _, err := domain.NewGroup("group-test", members, valid, nil, nil); err != nil {
 		t.Fatalf("limits of one must be accepted: %v", err)
 	}
 	cases := []struct {
@@ -131,7 +132,7 @@ func TestNominationLimitNotLessThanOne(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			settings := valid
 			c.change(&settings)
-			group, err := domain.NewGroup(domain.GroupSnapshot{ID: "group-test", Nominations: []domain.Nomination{open(1, ada, alex)}}, members, settings)
+			group, err := domain.NewGroup("group-test", members, settings, []domain.Nomination{open(1, ada, alex)}, nil)
 			var below domain.LimitBelowOne
 			if !errors.As(err, &below) {
 				t.Fatalf("want LimitBelowOne, got group %v and error %v", group, err)
@@ -146,11 +147,11 @@ func TestNominationLimitNotLessThanOne(t *testing.T) {
 func TestOneOpenNominationPerPerson(t *testing.T) {
 	settings := domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3}
 	group := newGroup(t, settings, open(1, ada, alex))
-	before := group.Snapshot()
+	before := snapshot(group)
 
 	_, err := group.Nominate(blair.ID, candidates(ada), today)
 	refused := refusal(t, err, domain.OneOpenNominationPerPerson)
-	wantNumbers(t, refused.Nominations, 1)
+	wantNumbers(t, refused.Numbers, 1)
 	wantUnchanged(t, group, before)
 
 	_, err = group.Nominate(blair.ID, candidates(grace, grace), today)
@@ -160,19 +161,19 @@ func TestOneOpenNominationPerPerson(t *testing.T) {
 	}
 	wantUnchanged(t, group, before)
 
-	_, err = domain.NewGroup(domain.GroupSnapshot{ID: "group-test", Nominations: []domain.Nomination{open(1, ada, alex), open(2, ada, blair)}}, members, settings)
+	_, err = domain.NewGroup("group-test", members, settings, []domain.Nomination{open(1, ada, alex), open(2, ada, blair)}, nil)
 	refused = refusal(t, err, domain.OneOpenNominationPerPerson)
-	wantNumbers(t, refused.Nominations, 1, 2)
+	wantNumbers(t, refused.Numbers, 1, 2)
 }
 
 func TestOpenNominationsWithinGroupLimit(t *testing.T) {
 	settings := domain.Settings{GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3, AllowRenomination: true}
 	group := newGroup(t, settings, finalized(1, dorothy, domain.Rejected), open(2, ada, blair), open(3, grace, casey))
-	before := group.Snapshot()
+	before := snapshot(group)
 
 	_, err := group.Nominate(alex.ID, candidates(katherine), today)
 	refused := refusal(t, err, domain.OpenNominationsWithinGroupLimit)
-	wantNumbers(t, refused.Nominations, 2, 3)
+	wantNumbers(t, refused.Numbers, 2, 3)
 	if refused.Limit != 2 {
 		t.Fatalf("the refusal must carry the limit 2, got %d", refused.Limit)
 	}
@@ -180,7 +181,7 @@ func TestOpenNominationsWithinGroupLimit(t *testing.T) {
 
 	_, err = group.Renominate(alex.ID, candidates(dorothy), today)
 	refused = refusal(t, err, domain.OpenNominationsWithinGroupLimit)
-	wantNumbers(t, refused.Nominations, 2, 3)
+	wantNumbers(t, refused.Numbers, 2, 3)
 	wantUnchanged(t, group, before)
 
 	settings.GroupOpenNominationLimit = 3
@@ -189,7 +190,7 @@ func TestOpenNominationsWithinGroupLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a Group below its limit must accept the nomination: %v", err)
 	}
-	if len(opened) != 1 || opened[0].Nomination.Person.ID != katherine.ID {
+	if len(opened) != 1 || nomination(t, group, opened[0].Number).Person != katherine {
 		t.Fatalf("want Katherine opened, got %+v", opened)
 	}
 }
@@ -211,11 +212,11 @@ func TestLoweringTheGroupLimitRefusesOnlyNewNominations(t *testing.T) {
 
 func TestOpenNominationsWithinMemberLimit(t *testing.T) {
 	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}, open(1, ada, alex))
-	before := group.Snapshot()
+	before := snapshot(group)
 
 	_, err := group.Nominate(alex.ID, candidates(grace), today)
 	refused := refusal(t, err, domain.OpenNominationsWithinMemberLimit)
-	wantNumbers(t, refused.Nominations, 1)
+	wantNumbers(t, refused.Numbers, 1)
 	if refused.Limit != 1 {
 		t.Fatalf("the refusal must carry the limit 1, got %d", refused.Limit)
 	}
@@ -225,7 +226,7 @@ func TestOpenNominationsWithinMemberLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Blair has room under the member limit: %v", err)
 	}
-	got := nomination(t, group, opened[0].Nomination.Number)
+	got := nomination(t, group, opened[0].Number)
 	if got.Person.ID != grace.ID || got.Nominator != blair.ID || got.Votes[blair.ID] != domain.Yes {
 		t.Fatalf("want Grace nominated by Blair with Blair's yes, got %+v", got)
 	}
@@ -233,7 +234,7 @@ func TestOpenNominationsWithinMemberLimit(t *testing.T) {
 
 func TestNominationsPerMessageWithinLimit(t *testing.T) {
 	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 2})
-	before := group.Snapshot()
+	before := snapshot(group)
 
 	_, err := group.Nominate(alex.ID, candidates(ada, grace, katherine), today)
 	refused := refusal(t, err, domain.NominationsPerMessageWithinLimit)
@@ -250,39 +251,39 @@ func TestNominationsPerMessageWithinLimit(t *testing.T) {
 		t.Fatalf("want two Nominations opened, got %d", len(opened))
 	}
 	for _, each := range opened {
-		if each.Nomination.Votes[alex.ID] != domain.Yes || len(each.Nomination.Votes) != 1 {
-			t.Fatalf("each Nomination opens with only the nominator's yes, got %+v", each.Nomination.Votes)
+		if votes := nomination(t, group, each.Number).Votes; votes[alex.ID] != domain.Yes || len(votes) != 1 {
+			t.Fatalf("each Nomination opens with only the nominator's yes, got %+v", votes)
 		}
 	}
 }
 
 func TestMessageNominatesAllOrNone(t *testing.T) {
 	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3}, open(1, ada, blair))
-	before := group.Snapshot()
+	before := snapshot(group)
 	_, err := group.Nominate(alex.ID, candidates(grace, katherine, dorothy), today)
 	refused := refusal(t, err, domain.MessageNominatesAllOrNone)
-	if refused.Limit != 2 {
-		t.Fatalf("the Group has room for 2, got %d", refused.Limit)
+	if refused.Room != 2 {
+		t.Fatalf("the Group has room for 2, got %d", refused.Room)
 	}
 	wantUnchanged(t, group, before)
 
 	group = newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 2, SingleMessageNominationLimit: 3})
-	before = group.Snapshot()
+	before = snapshot(group)
 	_, err = group.Nominate(alex.ID, candidates(grace, katherine, dorothy), today)
 	refused = refusal(t, err, domain.MessageNominatesAllOrNone)
-	if refused.Limit != 2 {
-		t.Fatalf("Alex has room for 2, got %d", refused.Limit)
+	if refused.Room != 2 {
+		t.Fatalf("Alex has room for 2, got %d", refused.Room)
 	}
 	wantUnchanged(t, group, before)
 }
 
 func TestVoteNamesItsNomination(t *testing.T) {
 	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}, open(1, ada, alex), open(2, grace, casey))
-	before := group.Snapshot()
+	before := snapshot(group)
 
 	_, err := group.CastVote(blair.ID, []domain.Ballot{{Vote: domain.Yes}}, today)
 	refused := refusal(t, err, domain.VoteNamesItsNomination)
-	wantNumbers(t, refused.Nominations, 1, 2)
+	wantNumbers(t, refused.Numbers, 1, 2)
 	wantUnchanged(t, group, before)
 
 	_, err = group.CastVote(blair.ID, []domain.Ballot{{Nomination: domain.Ref{Number: 1}, Vote: domain.Yes}, {Vote: domain.No}}, today)
@@ -317,11 +318,11 @@ func TestUnnamedVoteCountsWithOneOpenNomination(t *testing.T) {
 func TestRenominatedOnlyThroughRenomination(t *testing.T) {
 	settings := domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}
 	group := newGroup(t, settings, finalized(1, ada, domain.Rejected))
-	before := group.Snapshot()
+	before := snapshot(group)
 
 	_, err := group.Nominate(blair.ID, candidates(ada), today)
 	refused := refusal(t, err, domain.RenominatedOnlyThroughRenomination)
-	wantNumbers(t, refused.Nominations, 1)
+	wantNumbers(t, refused.Numbers, 1)
 	if refused.Renominable {
 		t.Fatal("a Group that does not allow renomination must not offer it")
 	}
@@ -332,7 +333,7 @@ func TestRenominatedOnlyThroughRenomination(t *testing.T) {
 
 	_, err = group.Nominate(blair.ID, candidates(grace), today)
 	refused = refusal(t, err, domain.RenominatedOnlyThroughRenomination)
-	wantNumbers(t, refused.Nominations, 2)
+	wantNumbers(t, refused.Numbers, 2)
 	if refused.Renominable {
 		t.Fatal("a certified Person can never be renominated")
 	}
@@ -343,7 +344,7 @@ func TestRenominatedOnlyThroughRenomination(t *testing.T) {
 		t.Fatal("a rejected Person in a Group that allows renomination must be offered it")
 	}
 
-	renominated, err := group.Renominate(blair.ID, []domain.Candidate{{Person: domain.Person{ID: ada.ID, Name: "ADA LOVELACE"}, Pitch: "Engines"}}, today)
+	renominated, err := group.Renominate(blair.ID, []domain.Candidate{{Person: ada.ID, Name: "ADA LOVELACE", Pitch: "Engines"}}, today)
 	if err != nil {
 		t.Fatalf("renomination must open a Nomination: %v", err)
 	}
@@ -356,21 +357,21 @@ func TestRenominatedOnlyThroughRenomination(t *testing.T) {
 func TestRenominatedOnlyWhenRejected(t *testing.T) {
 	settings := domain.Settings{GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 2, SingleMessageNominationLimit: 3, AllowRenomination: true}
 	group := newGroup(t, settings, open(1, ada, alex), finalized(2, grace, domain.Certified))
-	before := group.Snapshot()
+	before := snapshot(group)
 
 	_, err := group.Renominate(blair.ID, candidates(grace), today)
 	refused := refusal(t, err, domain.RenominatedOnlyWhenRejected)
-	wantNumbers(t, refused.Nominations, 2)
+	wantNumbers(t, refused.Numbers, 2)
 	wantUnchanged(t, group, before)
 
 	_, err = group.Renominate(blair.ID, candidates(ada), today)
 	refused = refusal(t, err, domain.RenominatedOnlyWhenRejected)
-	wantNumbers(t, refused.Nominations, 1)
+	wantNumbers(t, refused.Numbers, 1)
 	wantUnchanged(t, group, before)
 
 	_, err = group.Renominate(blair.ID, candidates(katherine), today)
 	refused = refusal(t, err, domain.RenominatedOnlyWhenRejected)
-	if refused.Ref != (domain.Ref{Person: katherine.ID}) || len(refused.Nominations) != 0 {
+	if refused.Ref != (domain.Ref{Person: katherine.ID}) || len(refused.Numbers) != 0 {
 		t.Fatalf("a Person never nominated must be named with no Nomination, got %+v", refused)
 	}
 	wantUnchanged(t, group, before)
@@ -378,7 +379,7 @@ func TestRenominatedOnlyWhenRejected(t *testing.T) {
 
 func TestRenominatedOnlyWhenGroupAllows(t *testing.T) {
 	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}, finalized(1, ada, domain.Rejected))
-	before := group.Snapshot()
+	before := snapshot(group)
 
 	_, err := group.Renominate(blair.ID, candidates(ada), today)
 	refusal(t, err, domain.RenominatedOnlyWhenGroupAllows)
@@ -396,7 +397,21 @@ func TestNominationNumbersContinueAfterTheHighest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Nominate: %v", err)
 	}
-	if opened[0].Nomination.Number != 10 {
-		t.Fatalf("want Nomination 10 after the highest 9, a refusal using no number, got %d", opened[0].Nomination.Number)
+	if opened[0].Number != 10 {
+		t.Fatalf("want Nomination 10 after the highest 9, a refusal using no number, got %d", opened[0].Number)
+	}
+}
+
+func TestGettersReturnCopiesTheCallerCannotChange(t *testing.T) {
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}, open(1, ada, alex))
+
+	got := nomination(t, group, 1)
+	got.Votes[blair.ID] = domain.No
+	got.Exhibits = append(got.Exhibits, "forged")
+	group.Nominations()[0].Votes[casey.ID] = domain.No
+	group.Open()[0].Votes[casey.ID] = domain.No
+
+	if votes := nomination(t, group, 1).Votes; len(votes) != 1 || votes[alex.ID] != domain.Yes {
+		t.Fatalf("changing a returned Nomination changed the Group: %+v", votes)
 	}
 }
