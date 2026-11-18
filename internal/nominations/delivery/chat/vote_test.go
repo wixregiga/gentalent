@@ -107,6 +107,36 @@ func TestFinalByNumberAndName(t *testing.T) {
 	contains(t, h.say(alex, "!final"), "Congratulations Juno Vale (#1)!")
 }
 
+func TestAVoteReplyingToAnAnnouncementVotesOnThatNomination(t *testing.T) {
+	h := newHarness(t, severalOpen(3, 3))
+	h.send(alex, "!gt Juno Vale. Pitch !gt Remy Quill. Pitch")
+	replyTo := func(from chat.Member, text string, announces int) string {
+		t.Helper()
+		replies := h.handle(chat.Message{Sender: string(from.ID), Text: text, ReplyTo: &chat.Quoted{ID: "announcement", FromBot: true, Announces: announces}})
+		if len(replies) != 1 {
+			t.Fatalf("%q: want one reply, got %+v", text, replies)
+		}
+		return replies[0].Text
+	}
+	contains(t, replyTo(blair, "!!Y", 2), "@Blair has voted for Remy Quill (#2)")
+	if _, voted := h.nomination(1).Votes[blair.ID]; voted {
+		t.Fatal("Q7 the reply names the Nomination, so no other one is voted on")
+	}
+	contains(t, replyTo(casey, "!!N 1", 2), "@Casey has voted against Juno Vale (#1)")
+	if _, voted := h.nomination(2).Votes[casey.ID]; voted {
+		t.Fatal("Q7 a reference in the text wins over the reply")
+	}
+	h.send(blair, "!!Y 1")
+	h.send(casey, "!!Y 1")
+	h.send(alex, "!final 1")
+	if got := replyTo(casey, "!!N", 1); got != "Finished already: Juno Vale (#1)." {
+		t.Fatalf("Q7 a reply to a finished Nomination's announcement is refused, got %q", got)
+	}
+	if _, voted := h.nomination(2).Votes[casey.ID]; voted {
+		t.Fatal("Q7 a vote on a finished Nomination never lands on the only open one")
+	}
+}
+
 func TestReactionsVote(t *testing.T) {
 	h := newHarness(t, oneAtATime)
 	h.send(alex, "!gt Juno Vale. Pitch")

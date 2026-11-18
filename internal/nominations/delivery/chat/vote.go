@@ -22,6 +22,10 @@ func (b *Bot) vote(ctx context.Context, from Member, msg Message, match []string
 	if err != nil {
 		return err
 	}
+	var announced domain.Ref
+	if msg.ReplyTo != nil {
+		announced.Number = domain.NominationNumber(msg.ReplyTo.Announces)
+	}
 	starts := voteStart.FindAllStringSubmatchIndex(text, -1)
 	var ballots []domain.Ballot
 	for i, start := range starts {
@@ -35,7 +39,7 @@ func (b *Bot) vote(ctx context.Context, from Member, msg Message, match []string
 		case named.refused != "":
 			return b.say(ctx, msg, named.refused)
 		case len(named.refs) == 0:
-			ballots = append(ballots, domain.Ballot{Vote: choice})
+			ballots = append(ballots, domain.Ballot{Nomination: announced, Vote: choice})
 		}
 		for _, ref := range named.refs {
 			ballots = append(ballots, domain.Ballot{Nomination: ref, Vote: choice})

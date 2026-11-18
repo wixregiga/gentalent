@@ -21,6 +21,7 @@ type Linked struct {
 	SentAt  time.Time
 	FromBot bool
 	Missing bool
+	Tag     string
 }
 
 type Message struct {

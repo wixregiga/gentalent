@@ -19,6 +19,7 @@ type Quoted struct {
 	FromBot       bool
 	Missing       bool
 	HasAttachment bool
+	Announces     int
 }
 
 type Reply struct {

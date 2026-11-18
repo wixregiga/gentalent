@@ -98,6 +98,16 @@ func TestStatusAndTagReadOnlyDeliveredEvidence(t *testing.T) {
 			t.Fatalf("tag %q read message %q", tag, id)
 		}
 	}
+	for id, want := range map[string]string{"pending": "sent-tag", "delivered": "sent-tag", "failed-id": "failed-tag"} {
+		tag, known, err := s.ReplyTag(ctx, id)
+		must(t, err)
+		if !known || tag != want {
+			t.Fatalf("D35 message %s is the reply tagged %q, got %q, %v", id, want, tag, known)
+		}
+	}
+	if tag, known, err := s.ReplyTag(ctx, "someone-else"); known || tag != "" || err != nil {
+		t.Fatalf("a message the bot never sent is no reply, got %q, %v, %v", tag, known, err)
+	}
 	report, err := s.UncertainReplies(ctx)
 	must(t, err)
 	if len(report.Counts) != 5 || report.Counts[domain.Sent] != 1 || len(report.Attention) != 2 ||
