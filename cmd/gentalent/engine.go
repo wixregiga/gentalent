@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 	"time"
 
 	aicommand "gentalent/internal/ai/app/command"
@@ -138,7 +140,8 @@ func chatMessage(incoming mdomain.Incoming) chat.Message {
 	message := chat.Message{ID: incoming.ID, Sender: incoming.Sender, Text: incoming.Text, SentAt: incoming.SentAt, Mentions: incoming.Mentions}
 	if linked := incoming.Linked; linked != nil {
 		message.ReplyTo = &chat.Quoted{
-			ID: linked.ID, Author: linked.Sender, Text: linked.Text, SentAt: linked.SentAt, FromBot: linked.FromBot, Missing: linked.Missing,
+			ID: linked.ID, Author: linked.Sender, Text: linked.Text, SentAt: linked.SentAt, HasAttachment: linked.HasAttachment,
+			FromBot: linked.FromBot, Missing: linked.Missing, Announces: announcedNomination(linked.Tag),
 		}
 	}
 	return message
@@ -161,11 +164,21 @@ func (e *engine) relay(ctx context.Context) error {
 	return e.bot.MarkRelayed(ctx, keys)
 }
 
+const announcementTagPrefix = "announces/"
+
 func announcementTag(nomination int) string {
 	if nomination == 0 {
 		return ""
 	}
-	return fmt.Sprintf("announces/%d", nomination)
+	return announcementTagPrefix + strconv.Itoa(nomination)
+}
+
+func announcedNomination(tag string) int {
+	number, err := strconv.Atoi(strings.TrimPrefix(tag, announcementTagPrefix))
+	if !strings.HasPrefix(tag, announcementTagPrefix) || err != nil || number < 1 {
+		return 0
+	}
+	return number
 }
 
 func (e *engine) countReactions(ctx context.Context) error {

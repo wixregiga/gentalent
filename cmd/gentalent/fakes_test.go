@@ -37,12 +37,16 @@ func (c *fakeChat) tick() time.Time {
 }
 
 func (c *fakeChat) say(sender, text string) string {
+	return c.reply(sender, text, "")
+}
+
+func (c *fakeChat) reply(sender, text, linkedID string) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	id := fmt.Sprintf("member-message-%d", len(c.log)+1)
 	c.log = append(c.log, mdomain.Message{
 		ID: id, ChatID: c.group.ChatID, AccountID: c.group.AccountID, Sender: sender, Text: text,
-		SortKey: strconv.Itoa(len(c.log)), SentAt: c.tick(),
+		SortKey: strconv.Itoa(len(c.log)), SentAt: c.tick(), LinkedID: linkedID,
 	})
 	return id
 }

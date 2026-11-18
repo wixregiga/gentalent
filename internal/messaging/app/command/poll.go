@@ -112,11 +112,10 @@ func (p Poller) linked(ctx context.Context, id string) (*domain.Linked, error) {
 	if err != nil {
 		return nil, err
 	}
-	text := domain.PlainText(raw.Text)
-	if strings.TrimSpace(text) == "" && len(raw.Attachments) != 0 {
-		text = "[photo]"
-	}
-	return &domain.Linked{ID: raw.ID, Sender: raw.Sender, Text: text, SentAt: raw.SentAt, FromBot: own, Tag: tag}, nil
+	return &domain.Linked{
+		ID: raw.ID, Sender: raw.Sender, Text: domain.PlainText(raw.Text), SentAt: raw.SentAt,
+		HasAttachment: len(raw.Attachments) != 0, FromBot: own, Tag: tag,
+	}, nil
 }
 
 func (p Poller) fromBot(ctx context.Context, raw domain.Message) (bool, string, error) {

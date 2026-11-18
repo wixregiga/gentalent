@@ -111,7 +111,7 @@ func photoFinder(cfg config, only string) (*aicommand.Finder, error) {
 	if err != nil {
 		return nil, err
 	}
-	finder, err := aicommand.NewFinder(providers, programs.Programs(), images, programs.SourcesFile{})
+	finder, err := aicommand.NewFinder(providers, programs.Programs(), images, programs.SearchFiles{})
 	if err != nil {
 		return nil, fmt.Errorf("ai_providers: %w", err)
 	}

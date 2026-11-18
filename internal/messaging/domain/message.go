@@ -15,13 +15,14 @@ type Incoming struct {
 }
 
 type Linked struct {
-	ID      string
-	Sender  string
-	Text    string
-	SentAt  time.Time
-	FromBot bool
-	Missing bool
-	Tag     string
+	ID            string
+	Sender        string
+	Text          string
+	SentAt        time.Time
+	HasAttachment bool
+	FromBot       bool
+	Missing       bool
+	Tag           string
 }
 
 type Message struct {

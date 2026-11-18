@@ -21,6 +21,9 @@ internal/
     port/                      the chat platform and the messaging database
     infra/beeper/              Beeper Desktop API adapter, the only importer of the Beeper SDK
     infra/sqlite/              the messaging database: inbox, cursor, outbox, migrations
+    infra/worker/              the database lock, the machine-wide live lock per group, the dry-run path
+    infra/preview/             the dry-run sender that prints PREVIEW: replies
+    infra/files/               a sent attachment's name and size, for resolve-send
   ai/                          AI agents that do work for the Group (domain context ai)
     domain/                    a photo search, its manifest and its result
     app/command/               find a Person's photos
@@ -64,6 +67,16 @@ exports its migrations as `[]func(context.Context, *sql.Tx) error`, which cmd ru
 `sqlitedb.Migrate` at startup. The first
 migration of each imports its share of the Python bot's `gentalent.sqlite3` when that file
 exists, reading it only; the Python file itself is never changed.
+
+The translation between hexagons lives in one place, `cmd/gentalent/engine.go`: a
+messaging `Incoming` becomes a `chat.Message` (a linked reply tagged `announces/<n>` sets
+`Quoted.Announces`, so a vote that replies to an announcement counts on that Nomination),
+and a nominations `Reply` becomes a messaging `Outgoing` tagged `announces/<n>` when it
+announces Nomination n. `cmd/gentalent/databases.go` opens both databases, takes the
+locks, runs the migrations and starts messaging's worker. A delivered reply's final
+message ID is known only after the flush that follows its send, so a reply to an
+announcement sent in the same poll interval is treated as unnamed and asked to name its
+Nomination; it never lands on another one.
 
 ## Where a change goes
 

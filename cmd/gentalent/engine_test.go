@@ -63,7 +63,7 @@ func startBot(t *testing.T, cfg config, chat *fakeChat, agent *blockingAgent) *t
 	if _, err := armer.Arm(t.Context(), true); err != nil {
 		t.Fatal(err)
 	}
-	finder, err := aicommand.NewFinder([]aidomain.Provider{{CLI: "fake", Model: "test"}}, map[string]aiport.Agent{"fake": agent}, copyingImages{}, programs.SourcesFile{})
+	finder, err := aicommand.NewFinder([]aidomain.Provider{{CLI: "fake", Model: "test"}}, map[string]aiport.Agent{"fake": agent}, copyingImages{}, programs.SearchFiles{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,5 +374,32 @@ func TestAnUnreadableAnnouncementLeavesReactionVotesAlone(t *testing.T) {
 	b.cycle()
 	if !strings.Contains(b.status(), "2/3 votes in") {
 		t.Fatalf("B75 a failed read changed votes: %q", b.status())
+	}
+}
+
+func TestAVoteThatRepliesToAnAnnouncementCountsOnThatNomination(t *testing.T) {
+	b := newTestBot(t)
+	b.chat.say(blairID, "!gt Grace Hopper. Wrote the first compiler")
+	b.chat.say(caseyID, "!gt Katherine Johnson. Orbital math")
+	b.cycle()
+	sent := b.chat.delivered()
+	if len(sent) != 2 {
+		t.Fatalf("want two announcements, got %q", b.sentTexts())
+	}
+	b.cycle()
+
+	b.chat.say(alexID, "!!Y")
+	b.chat.reply(alexID, "!!N", "sent-1")
+	b.cycle()
+
+	replies := b.sentTexts()[2:]
+	if len(replies) != 2 {
+		t.Fatalf("want a refusal and a vote reply, got %q", replies)
+	}
+	if !strings.Contains(replies[0], "Grace Hopper") || !strings.Contains(replies[0], "Katherine Johnson") {
+		t.Fatalf("the unnamed vote must be refused listing both Nominations, got %q", replies[0])
+	}
+	if !strings.Contains(replies[1], "Grace Hopper") || strings.Contains(replies[1], "Katherine Johnson") {
+		t.Fatalf("the reply to the first announcement must vote on that Nomination only, got %q", replies[1])
 	}
 }

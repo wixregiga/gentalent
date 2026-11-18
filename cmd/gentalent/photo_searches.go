@@ -48,6 +48,7 @@ func (p *photoSearches) find(ctx context.Context, search chat.PhotoSearch) chat.
 	}
 	return chat.PhotoResult{
 		Nomination: search.Nomination, Photos: found.Photos, Strip: found.Strip, Provider: found.Provider, Sources: found.Sources,
+		Summary: found.Summary,
 	}
 }
 
