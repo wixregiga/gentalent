@@ -29,11 +29,13 @@ Branches ship by fast-forward, so rebase onto `main` before shipping if `main` m
 
 ## Never
 
-- Copy `config.json` into a worktree, or run `python3 -m gentalent run --live` outside the
-  main checkout. A second live bot would answer every command twice; a machine-wide lock
-  per group refuses it, but do not rely on that.
-- Write to `.state/gentalent.sqlite3` by hand. Rehearse against a copy made with the
-  SQLite backup API, and use `gentalent status` / `resolve-send` for the live one.
+- Copy `config.json` into a worktree, or run `go run ./cmd/gentalent run --live` (or the
+  Python `python3 -m gentalent run --live`) outside the main checkout. A second live bot
+  would answer every command twice; a machine-wide lock per group refuses it, but do not
+  rely on that.
+- Write to `.state/nominations.sqlite3`, `.state/messaging.sqlite3` or
+  `.state/gentalent.sqlite3` by hand. Rehearse against a copy made with the SQLite backup
+  API, and use `gentalent status` / `resolve-send` for the live one.
 - Run `mise daemons restart`: it also restarts the Beeper app. Deploys stop and start only the bot.
 - Send messages into the group to test something without the owner's go-ahead.
 - Commit personal data: friends' names or phone IDs, account IDs, chat IDs, the owner's
@@ -55,6 +57,7 @@ Branches ship by fast-forward, so rebase onto `main` before shipping if `main` m
   confirm it fails. No tests of formatting trivia or of mocks.
 - The interpreter: inside scratch checkouts the `mise` shim may refuse an untrusted
   `mise.toml`; scripts resolve `python3` and `go` once at a trusted root and call them by path.
-- Go: `doc/architecture.md` is the map; `cmd/gentalent` is the only place that wires the
-  hexagons, starts goroutines or prints. Never run `go run ./cmd/gentalent run --live`
-  outside the main checkout, for the same reason as the Python bot.
+- Go: the live bot is `cmd/gentalent`; the deploy installs the binary its tests ran against as `.live/bin/gentalent`.
+  `doc/architecture.md` is the map; `cmd/gentalent` is the only place that wires the
+  hexagons, starts goroutines or prints. The Python package stays until the Go suite
+  covers every behavior; nothing runs it.

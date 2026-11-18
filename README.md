@@ -21,7 +21,7 @@ Replies come from the account paired with Beeper, prefixed `@gentalent-bot says:
 | `!gtlist` / `!gtlist losers` | Certified winners (default) or denied nominees. |
 | `!gtshame [nominee] [reason]` as a reply | Shame the author of that message, quoting it, with a GIF. One shame given per nominee each. |
 | `!gtshame @Name [nominee] [reason]` | The same, by tag. The nominee defaults to the latest one. |
-| `!gtfeedback idea` / `!gtsuggest idea` | Log an idea for the bot. Read them with `python3 -m gentalent feedback --live`. |
+| `!gtfeedback idea` / `!gtsuggest idea` | Log an idea for the bot. Read them with `go run ./cmd/gentalent feedback --live`. |
 
 Messages from outside the configured group and roster, and edited, deleted or hidden
 messages, are ignored, as are the bot's own replies.
@@ -42,16 +42,17 @@ denials. Shame GIFs live in `.state/media/shame-gifs/`, used least-used first.
 The AI search is the same either way; it always saves three photos and the stitched strip.
 Changing the setting needs a restart, not a deploy:
 `mise daemons stop gentalent && mise daemons start gentalent`. (`mise daemons restart`
-also restarts the Beeper app.) Restart when no `!!gt` photo search is running, or that
-search starts over.
+also restarts the Beeper app.) Restart when no `!!gt` photo search is running
+(`go run ./cmd/gentalent busy --live` says), or that search is abandoned: the Group is told
+it has no photos, and it never runs again.
 
 ## How it runs
 
 Two `mise` daemons start at boot (`mise.toml`): `beeper` (the Linux Beeper Desktop app) and
 `gentalent` (the bot).
 
-The bot runs the commit pinned in `.live/`, a git worktree. **Editing files does not change
-the live bot.** Only a deploy does:
+The bot runs the commit pinned in `.live/`, a git worktree, as `.live/bin/gentalent`.
+**Editing files does not change the live bot.** Only a deploy does:
 
     mise run ship <branch>           # fast-forward main to a branch, then deploy it
     mise run deploy                  # deploy main
@@ -60,13 +61,18 @@ the live bot.** Only a deploy does:
 
 All of these run from the main checkout only, and a real deploy takes only commits on `main`.
 
-A deploy runs the tests in a scratch checkout and `doctor --contract` against the real
-Beeper API. It refuses while the bot is mid-operation (a `!!gt` photo search holds the
-database for minutes; restarting then would repeat the AI call). It then pins `.live` and
-restarts. If the bot doesn't stay up, it puts `.live` back on the previous commit. It
-refuses while `.live` has local changes (anything `git -C .live status` shows), because a
-checkout keeps them and the bot would run code no test saw. `scripts/deploy-test.sh` runs
-the real deploy script in a throwaway repository to prove its refusals.
+A deploy runs the Python and Go tests in a scratch checkout and `doctor --contract` against
+the real Beeper API. It refuses while a `!!gt` photo search is running, because a restart
+would interrupt it: while the deployed bot is still the Python one, by the write lock the
+Python bot holds during a search; once it is the Go bot, by `gentalent busy`. It refuses
+while `.live` has local changes (anything `git -C .live status` shows), because a checkout
+keeps them and the bot would run code no test saw. It backs up the databases, pins `.live`,
+installs the binary the tests ran against as `.live/bin/gentalent` and restarts. If the bot
+doesn't stay up, it puts `.live` back on the previous commit, except onto a commit that
+starts the Python bot once the Go bot has run: the Python bot's cursor did not move
+meanwhile, so it would answer again what the Go bot answered. The deploy then stops and says
+how to fix forward. `scripts/deploy-test.sh` runs the real deploy script in a throwaway
+repository to prove each refusal.
 
 It refuses commits from before `.live` existed, because their startup script runs the
 working tree.
@@ -74,20 +80,21 @@ working tree.
 Day to day:
 
     mise run status    # daemons, deployed commit, Beeper check, replies needing attention
-    python3 -m gentalent doctor --contract   # does Beeper still behave as doc/beeper-api.md says?
+    go run ./cmd/gentalent doctor --contract   # does Beeper still behave as doc/beeper-api.md says?
     mise run logs      # recent bot output
     mise run test
 
-`gentalent status` opens the database read-only and is safe while the bot runs. Use it,
-not a database viewer on Windows: recent changes sit in `.state/gentalent.sqlite3-wal`,
-which a viewer opened over `\\wsl.localhost` may not see.
+`gentalent status` opens the databases read-only and is safe while the bot runs. Use it,
+not a database viewer on Windows: recent changes sit in `.state/nominations.sqlite3-wal` and
+`.state/messaging.sqlite3-wal`, which a viewer opened over `\\wsl.localhost` may not see.
 
 ## Working on it
 
-The Python bot in `gentalent/` is the one that runs. Its Go replacement is built beside it
-(`doc/architecture.md`): `go run ./cmd/gentalent <subcommand>` takes the same subcommands
-and flags, plus `busy`, which exits non-zero while a photo search is running. The Go bot
-keeps its own databases, `nominations_database` and `messaging_database` in `config.json`
+The bot is the Go program in `cmd/gentalent` (`doc/architecture.md` is the map); the Python
+package in `gentalent/` stays until the Go suite covers every behavior, and nothing runs it.
+`go run ./cmd/gentalent <subcommand>` takes the Python CLI's subcommands and flags, plus
+`busy`, which exits non-zero while a photo search is running. The Go bot keeps its own
+databases, `nominations_database` and `messaging_database` in `config.json`
 (default `.state/nominations.sqlite3` and `.state/messaging.sqlite3`), and imports the
 Python history from `database` the first time it opens them, reading it only. It also
 reads `group_open_nomination_limit` and `member_open_nomination_limit` (default 1),
@@ -106,8 +113,8 @@ The bot never sends the same reply twice. If it can't tell whether a reply went 
 `uncertain` and moves on. `mise run status` lists these. Check the group, then record what
 happened:
 
-    python3 -m gentalent resolve-send --live OUTBOX_ID --message-id BEEPER_MESSAGE_ID
-    python3 -m gentalent resolve-send --live OUTBOX_ID --not-delivered
+    go run ./cmd/gentalent resolve-send --live OUTBOX_ID --message-id BEEPER_MESSAGE_ID
+    go run ./cmd/gentalent resolve-send --live OUTBOX_ID --not-delivered
 
 `--message-id` is checked against Beeper first: the message must be yours and carry that
 reply's text (or, for a photo reply, its `strip.jpg`). `--not-delivered` never resends.
@@ -120,14 +127,14 @@ observed. The send-tracking rules depend on it.
 
 1. Install Beeper Desktop for Linux, sign in, and connect Google Messages. Turn on the
    Desktop API (Settings, Integrations, Approved connections). Keep Remote Access off.
-2. `python3 -m gentalent init`, then `python3 -m gentalent set-secret` to store the API
+2. `go run ./cmd/gentalent init`, then `go run ./cmd/gentalent set-secret` to store the API
    token in `~/.config/gentalent/` (mode 600, hidden prompt).
 3. Find the group: `accounts`, `list-groups`, `find-chat "title words"`,
    `inspect-chat CHAT_ID`. Fill `config.json` with the exact chat ID, account ID, your
    sender ID as `owner_id`, and the three members.
-4. `python3 -m gentalent doctor --chat` must report an exact group and roster match.
-5. Try it without sending anything: `python3 -m gentalent arm`, then
-   `python3 -m gentalent run`. Replies print as `PREVIEW:` and use a separate dry-run
+4. `go run ./cmd/gentalent doctor --chat` must report an exact group and roster match.
+5. Try it without sending anything: `go run ./cmd/gentalent arm`, then
+   `go run ./cmd/gentalent run`. Replies print as `PREVIEW:` and use a separate dry-run
    database.
 6. `mise run deploy`. The live database arms itself on first start and ignores messages
    sent before that.
@@ -136,8 +143,9 @@ observed. The send-tracking rules depend on it.
 
 - `config.json` (real IDs) and `.state/` (ballots, media, backups) are git-ignored.
   `config.example.json` is the template.
-- Denials are permanent at the database level (triggers block deletes and updates). Keep
-  `.state/gentalent.sqlite3`. A fresh database loses the record.
+- Outcomes and shames are permanent at the database level (triggers block deletes and
+  updates). Keep `.state/nominations.sqlite3` and `.state/messaging.sqlite3`, and the Python
+  `.state/gentalent.sqlite3` they were first imported from. A fresh database loses the record.
 - The Beeper token can read and send as your account in every chat. GenTalent limits
   itself to one group and roster, but the token itself has no such limit.
 - `!!gt` strips API-key variables before running the AI CLIs, so they use subscription
