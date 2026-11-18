@@ -87,7 +87,9 @@ func TestLists(t *testing.T) {
 		t.Fatalf("B123 B124 losers, got %q", got)
 	}
 	h.send(blair, "!gtrenominate Juno Vale. Again")
-	contains(t, h.say(alex, "!gtlist losers"), "Losers (0)", "None yet", "Now voting: Juno Vale (#3, 1/3 votes in)")
+	if got := h.say(alex, "!gtlist losers"); got != "Losers (1)  \n🚫 Juno Vale\n\nNow voting: Juno Vale (#3, 1/3 votes in)  \nMore: !gtlist winners · !gtstatus" {
+		t.Fatalf("D17 D24 a renominated Person stays rejected while their Renomination is open, got %q", got)
+	}
 	if got := h.say(alex, "!gtlist everyone"); got != "Use !gtlist, !gtlist winners, or !gtlist losers." {
 		t.Fatalf("B123, got %q", got)
 	}

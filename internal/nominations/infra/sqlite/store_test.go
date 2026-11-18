@@ -288,8 +288,8 @@ func TestReadStanding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(standing.Certified, []string{"Grace Hopper"}) || len(standing.Rejected) != 0 {
-		t.Fatalf("D17 a renominated Person is in no list while open, got %+v", standing)
+	if !reflect.DeepEqual(standing.Certified, []string{"Grace Hopper"}) || !reflect.DeepEqual(standing.Rejected, []string{"Ada Lovelace"}) {
+		t.Fatalf("D17 D24 a renominated Person keeps the status of their latest finalized Nomination while open, got %+v", standing)
 	}
 	if len(standing.Open) != 1 || standing.Open[0].Number != 3 || standing.Open[0].Votes[blair] != domain.Yes || standing.Latest.Number != 3 {
 		t.Fatalf("Q24 the open Nomination with its votes, got %+v", standing)
