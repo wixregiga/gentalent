@@ -83,6 +83,13 @@ if [[ -e .live && "$(git -C .live rev-parse --show-toplevel 2>/dev/null)" != "$r
   echo ".live exists but is not a git worktree; refusing to touch it." >&2
   exit 1
 fi
+# A checkout keeps local edits, so a dirty .live would run code no test saw.
+if [[ -e .live && -n "$(git -C .live status --porcelain --untracked-files=all)" ]]; then
+  echo ".live has local changes, so pinning it would run untested code. Nothing was changed." >&2
+  git -C .live status --short --untracked-files=all >&2
+  echo "Move them out of .live (commit them on a branch and ship it, or delete them), then deploy again." >&2
+  exit 1
+fi
 previous="$(git -C .live rev-parse HEAD 2>/dev/null || true)"
 
 if [[ -n "$check_only" ]]; then

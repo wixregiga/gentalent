@@ -63,7 +63,10 @@ All of these run from the main checkout only, and a real deploy takes only commi
 A deploy runs the tests in a scratch checkout and `doctor --contract` against the real
 Beeper API. It refuses while the bot is mid-operation (a `!!gt` photo search holds the
 database for minutes; restarting then would repeat the AI call). It then pins `.live` and
-restarts. If the bot doesn't stay up, it puts `.live` back on the previous commit.
+restarts. If the bot doesn't stay up, it puts `.live` back on the previous commit. It
+refuses while `.live` has local changes (anything `git -C .live status` shows), because a
+checkout keeps them and the bot would run code no test saw. `scripts/deploy-test.sh` runs
+the real deploy script in a throwaway repository to prove its refusals.
 
 It refuses commits from before `.live` existed, because their startup script runs the
 working tree.
