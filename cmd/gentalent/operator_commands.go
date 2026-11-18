@@ -16,9 +16,16 @@ import (
 )
 
 type statusJSON struct {
-	Nominations string                `json:"nominations"`
+	Nominations []nominationJSON      `json:"nominations"`
 	Counts      map[mdomain.State]int `json:"outbox_counts"`
 	Attention   []attentionJSON       `json:"outbox_needing_attention"`
+}
+
+type nominationJSON struct {
+	Number int    `json:"number"`
+	Person string `json:"person"`
+	Status string `json:"status"`
+	Votes  int    `json:"votes"`
 }
 
 type attentionJSON struct {
@@ -54,7 +61,7 @@ func status(ctx context.Context, call invocation, args []string) error {
 	if err != nil {
 		return err
 	}
-	bot, closeNominations, err := openNominationsReader(ctx, cfg, live)
+	nominations, closeNominations, err := openNominationsReader(ctx, cfg, live)
 	if err != nil {
 		return err
 	}
@@ -64,7 +71,7 @@ func status(ctx context.Context, call invocation, args []string) error {
 		return err
 	}
 	defer closeMessaging.close()
-	standing, err := bot.StatusReport(ctx)
+	every, err := nominations.Nominations(ctx)
 	if err != nil {
 		return err
 	}
@@ -72,7 +79,10 @@ func status(ctx context.Context, call invocation, args []string) error {
 	if err != nil {
 		return err
 	}
-	report := statusJSON{Nominations: standing, Counts: outbox.Counts, Attention: make([]attentionJSON, len(outbox.Attention))}
+	report := statusJSON{Nominations: make([]nominationJSON, len(every)), Counts: outbox.Counts, Attention: make([]attentionJSON, len(outbox.Attention))}
+	for i, nomination := range every {
+		report.Nominations[i] = nominationJSON(nomination)
+	}
 	for i, reply := range outbox.Attention {
 		report.Attention[i] = attentionJSON{ID: reply.Key, Status: reply.State, Kind: reply.Kind, Tag: reply.Tag, Text: reply.Text}
 	}
@@ -84,12 +94,12 @@ func feedback(ctx context.Context, call invocation, args []string) error {
 	if err != nil {
 		return err
 	}
-	bot, closers, err := openNominationsReader(ctx, cfg, live)
+	nominations, closers, err := openNominationsReader(ctx, cfg, live)
 	if err != nil {
 		return err
 	}
 	defer closers.close()
-	entries, err := bot.Feedback(ctx)
+	entries, err := nominations.Feedback(ctx)
 	if err != nil {
 		return err
 	}
@@ -108,7 +118,7 @@ func busy(ctx context.Context, call invocation, args []string) error {
 	if err != nil {
 		return err
 	}
-	bot, closers, err := openNominationsReader(ctx, cfg, live)
+	nominations, closers, err := openNominationsReader(ctx, cfg, live)
 	if errors.Is(err, fs.ErrNotExist) {
 		fmt.Fprintln(call.out, "No photo search is running.")
 		return nil
@@ -117,7 +127,7 @@ func busy(ctx context.Context, call invocation, args []string) error {
 		return err
 	}
 	defer closers.close()
-	running, err := bot.SearchesRunning(ctx)
+	running, err := nominations.SearchesRunning(ctx)
 	if err != nil {
 		return err
 	}

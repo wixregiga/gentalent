@@ -105,18 +105,18 @@ func openWorker(ctx context.Context, cfg config, live bool, now func() time.Time
 		return nil, err
 	}
 	w.closers = append(w.closers, readSide.Close)
-	reader := nsqlite.NewReader(readSide)
 	w.bot = chat.NewBot(cfg.chat(now), chat.Ports{
 		Groups:    store,
 		Outbox:    store,
 		Feedback:  store,
 		Gifs:      files.NewGifBank(filepath.Join(cfg.MediaDir, "shame-gifs")),
-		Standing:  reader,
-		Names:     reader,
-		Unrelayed: reader,
-		Entries:   reader,
+		ReadPorts: readPorts(nsqlite.NewReader(readSide)),
 	})
 	return w, nil
+}
+
+func readPorts(reader nsqlite.Reader) chat.ReadPorts {
+	return chat.ReadPorts{Standing: reader, Names: reader, Unrelayed: reader, Entries: reader, Nominations: reader}
 }
 
 func existingDatabase(path string) error {
@@ -128,7 +128,7 @@ func existingDatabase(path string) error {
 	return nil
 }
 
-func openNominationsReader(ctx context.Context, cfg config, live bool) (*chat.Bot, closers, error) {
+func openNominationsReader(ctx context.Context, cfg config, live bool) (*chat.Reader, closers, error) {
 	path := cfg.databases(live).nominations
 	if err := existingDatabase(path); err != nil {
 		return nil, nil, err
@@ -137,9 +137,7 @@ func openNominationsReader(ctx context.Context, cfg config, live bool) (*chat.Bo
 	if err != nil {
 		return nil, nil, err
 	}
-	reader := nsqlite.NewReader(db)
-	ports := chat.Ports{Standing: reader, Names: reader, Unrelayed: reader, Entries: reader}
-	return chat.NewBot(cfg.chat(time.Now), ports), closers{db.Close}, nil
+	return chat.NewReader(cfg.chat(time.Now), readPorts(nsqlite.NewReader(db))), closers{db.Close}, nil
 }
 
 func openMessaging(ctx context.Context, path string, access sqlitedb.Access) (*msqlite.Store, closers, error) {

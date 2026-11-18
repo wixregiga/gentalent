@@ -105,13 +105,19 @@ func (b *testBot) waitStarted(n int) {
 	}
 }
 
-func (b *testBot) status() string {
+func (b *testBot) votes(number int) int {
 	b.t.Helper()
-	text, err := b.databases.bot.StatusReport(b.t.Context())
+	every, err := b.databases.bot.Nominations(b.t.Context())
 	if err != nil {
 		b.t.Fatal(err)
 	}
-	return text
+	for _, nomination := range every {
+		if nomination.Number == number {
+			return nomination.Votes
+		}
+	}
+	b.t.Fatalf("nomination %d does not exist", number)
+	return 0
 }
 
 func assertSentOnce(t *testing.T, replies []string) {
@@ -207,8 +213,8 @@ func TestRelayAfterACrashBetweenStepsSendsEachReplyOnce(t *testing.T) {
 
 	sent := b.sentTexts()
 	assertSentOnce(t, sent)
-	if len(sent) != 3 || !strings.Contains(b.status(), "3/3 votes in") {
-		t.Fatalf("want one reply per message and every vote counted once, got %q and status %q", sent, b.status())
+	if len(sent) != 3 || b.votes(1) != 3 {
+		t.Fatalf("want one reply per message and every vote counted once, got %q and %d votes", sent, b.votes(1))
 	}
 }
 
@@ -366,14 +372,14 @@ func TestAnUnreadableAnnouncementLeavesReactionVotesAlone(t *testing.T) {
 	announcement := "sent-1"
 	b.chat.react(announcement, caseyID, "👍🏽")
 	b.cycle()
-	if !strings.Contains(b.status(), "2/3 votes in") {
-		t.Fatalf("B66 a thumbs up on the announcement is a yes: %q", b.status())
+	if b.votes(1) != 2 {
+		t.Fatalf("B66 a thumbs up on the announcement is a yes: %d votes", b.votes(1))
 	}
 
 	b.chat.unreadable(announcement)
 	b.cycle()
-	if !strings.Contains(b.status(), "2/3 votes in") {
-		t.Fatalf("B75 a failed read changed votes: %q", b.status())
+	if b.votes(1) != 2 {
+		t.Fatalf("B75 a failed read changed votes: %d votes", b.votes(1))
 	}
 }
 

@@ -36,8 +36,8 @@ func (b *Bot) CountReactions(ctx context.Context, nomination int, byMember map[s
 	}))
 }
 
-func (b *Bot) OpenAnnouncements(ctx context.Context) ([]int, error) {
-	standing, err := b.standing.Handle(ctx)
+func (r *Reader) OpenAnnouncements(ctx context.Context) ([]int, error) {
+	standing, err := r.standing.Handle(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/url"
 	"path/filepath"
 	"reflect"
@@ -296,6 +297,17 @@ func TestReadStanding(t *testing.T) {
 	}
 	if !reflect.DeepEqual(standing.Searching, []domain.NominationNumber{1, 3}) {
 		t.Fatalf("D27 running photo searches are reported, got %v", standing.Searching)
+	}
+	every, err := sqlite.NewReader(db).Nominations(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := make([]string, len(every))
+	for i, view := range every {
+		listed[i] = fmt.Sprintf("%d %s %s %d", view.Number, view.Person, view.Status, len(view.Votes))
+	}
+	if want := []string{"1 Ada Lovelace rejected 3", "2 Grace Hopper certified 3", "3 Ada Lovelace nominated 1"}; !reflect.DeepEqual(listed, want) {
+		t.Fatalf("B158 every Nomination with its status and vote count, got %q", listed)
 	}
 	names, err := sqlite.NewReader(db).Names(context.Background())
 	if err != nil || len(names) != 2 || names[0].Person != "adalovelace" || names[1].Display != "Grace Hopper" {

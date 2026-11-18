@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -52,9 +51,21 @@ func TestBusyExitsNonZeroOnlyWhileAPhotoSearchIsStarted(t *testing.T) {
 	}
 
 	code, out, errs := gentalent(t, "--config", config, "status", "--live")
-	var report statusJSON
-	if code != 0 || json.Unmarshal([]byte(out), &report) != nil || !strings.Contains(report.Nominations, "Grace Hopper") {
-		t.Fatalf("status reads the live databases while the bot holds them: %d %q %q", code, out, errs)
+	want := `{
+  "nominations": [
+    {
+      "number": 1,
+      "person": "Grace Hopper",
+      "status": "nominated",
+      "votes": 1
+    }
+  ],
+  "outbox_counts": {},
+  "outbox_needing_attention": []
+}
+`
+	if code != 0 || out != want {
+		t.Fatalf("B158 status lists every Nomination while the bot holds the databases: %d %q %q", code, out, errs)
 	}
 }
 

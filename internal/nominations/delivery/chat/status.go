@@ -18,7 +18,7 @@ func (b *Bot) status(ctx context.Context, from Member, msg Message, match []stri
 	return b.say(ctx, msg, text)
 }
 
-func (b *Bot) statusText(standing port.Standing) string {
+func (r *Reader) statusText(standing port.Standing) string {
 	record := fmt.Sprintf("Record: %d certified, %d rejected", len(standing.Certified), len(standing.Rejected))
 	if len(standing.Open) == 0 {
 		last := ""
@@ -30,9 +30,9 @@ func (b *Bot) statusText(standing port.Standing) string {
 	summary := make([]string, 0, len(standing.Open))
 	var finish []string
 	for _, open := range standing.Open {
-		summary = append(summary, b.openLine(open))
+		summary = append(summary, r.openLine(open))
 		if !open.LockedAt.IsZero() {
-			nominator, _ := b.member(string(open.Nominator))
+			nominator, _ := r.member(string(open.Nominator))
 			finish = append(finish, fmt.Sprintf("Finish now: !final %d (@%s)", open.Number, literal(nominator.Name)))
 		}
 	}
@@ -46,14 +46,14 @@ func (b *Bot) statusText(standing port.Standing) string {
 	return sections(lines(append(summary, record)...), lines(append(append(keys, finish...), "More: !gtlist · !gthelp")...))
 }
 
-func (b *Bot) openLine(open port.NominationView) string {
-	members := len(b.config.Members)
+func (r *Reader) openLine(open port.NominationView) string {
+	members := len(r.config.Members)
 	if !open.LockedAt.IsZero() {
-		left := max(0, int(math.Round((domain.ResultDelay - b.config.Now().Sub(open.LockedAt)).Seconds())))
+		left := max(0, int(math.Round((domain.ResultDelay - r.config.Now().Sub(open.LockedAt)).Seconds())))
 		return fmt.Sprintf("Nomination %d: %s, %d/%d votes in, locked. Result in about %ds.", open.Number, literal(open.Person), members, members, left)
 	}
 	ballot := make([]string, 0, members)
-	for _, member := range b.config.Members {
+	for _, member := range r.config.Members {
 		switch open.Votes[member.ID] {
 		case domain.Yes:
 			ballot = append(ballot, "✅ "+literal(member.Name))
