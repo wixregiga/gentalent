@@ -74,18 +74,25 @@ for key, default in (("database", ".state/gentalent.sqlite3"),
 starts_python() {
   git show "$1:scripts/run-gentalent-live.sh" 2>/dev/null | grep -q -- '-m gentalent'
 }
-# The Python bot's cursor does not move while the Go bot runs. Once the Go bot has opened its
-# messaging database, a Python bot would answer again every message the Go bot answered.
-starts_python_after_go() {
-  [[ -e "$messaging_db" ]] && starts_python "$1"
+# A failed migration can leave the file behind without committing any Go state.
+messaging_version() {
+  if [[ ! -e "$messaging_db" ]]; then
+    echo 0
+    return
+  fi
+  "$python" -c 'import sqlite3, sys
+from pathlib import Path
+with sqlite3.connect(Path(sys.argv[1]).as_uri() + "?mode=ro", uri=True) as db:
+    print(db.execute("PRAGMA user_version").fetchone()[0])' "$messaging_db"
 }
-if starts_python_after_go "$target"; then
-  echo "${target:0:7} starts the Python bot, but the Go bot has run ($messaging_db exists)." >&2
+version="$(messaging_version)"
+if (( version > 0 )) && starts_python "$target"; then
+  echo "${target:0:7} starts the Python bot, but the Go bot has run ($messaging_db was migrated)." >&2
   echo "The Python bot would answer again every message the Go bot answered. Deploy a commit that starts the Go bot." >&2
   exit 1
 fi
 
-if [[ -e "$messaging_db" ]]; then
+if (( version > 0 )); then
   "$gentalent" --config "$root/config.json" doctor --contract
 else
   # The Go bot has not started yet. At its first start it imports exactly these Python
@@ -217,7 +224,12 @@ if [[ -z "$previous" ]]; then
   echo "No earlier pinned commit to roll back to; .live stays on ${target:0:7}." >&2
   exit 1
 fi
-if starts_python_after_go "$previous"; then
+if starts_python "$previous"; then
+  # Stop daemon retries before deciding whether the old cursor is safe to use.
+  timeout 60 mise daemons stop gentalent
+  version="$(messaging_version)"
+fi
+if (( version > 0 )) && starts_python "$previous"; then
   cat >&2 <<EOF
 Not rolling back to ${previous:0:7}: it starts the Python bot, and the Go bot has run. The Python
 cursor in $python_db did not move while the Go bot ran, so the Python bot would answer again

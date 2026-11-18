@@ -160,7 +160,7 @@ run_deploy "$second_go"
 expect "a failed deploy rolls back to the previous Go commit" 1 "$first_go" "Rolling .live back to ${first_go:0:7}."
 expect_binary "the rollback reinstalls the previous commit's binary" first
 
-: >.state/messaging.sqlite3
+python3 -c 'import sqlite3, sys; sqlite3.connect(sys.argv[1]).execute("PRAGMA user_version = 1")' .state/messaging.sqlite3
 live_at "$python_commit"
 run_deploy "$first_go"
 expect "a failed Go deploy is not rolled back to the Python bot after the Go bot ran" \
@@ -170,6 +170,12 @@ live_at "$python_commit"
 run_deploy "$python_commit"
 expect "a deploy of the Python bot is refused after the Go bot ran" \
   1 "$python_commit" "${python_commit:0:7} starts the Python bot, but the Go bot has run"
+
+rm .state/messaging.sqlite3
+python3 -c 'import sqlite3, sys; sqlite3.connect(sys.argv[1]).close()' .state/messaging.sqlite3
+run_deploy "$first_go"
+expect "a failed first Go deploy whose migration never committed rolls back to the Python bot" \
+  1 "$python_commit" "Rolling .live back to ${python_commit:0:7}."
 
 rm .state/messaging.sqlite3
 run_deploy "$first_go"
