@@ -75,7 +75,7 @@ func (p Poller) inboxItems(ctx context.Context, messages []domain.Message, armed
 		if !p.Group.Accepts(raw, armedAt) {
 			continue
 		}
-		own, err := p.fromBot(ctx, raw)
+		own, _, err := p.fromBot(ctx, raw)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +108,7 @@ func (p Poller) linked(ctx context.Context, id string) (*domain.Linked, error) {
 		}
 		return &domain.Linked{ID: id, Missing: true}, nil
 	}
-	own, err := p.fromBot(ctx, raw)
+	own, tag, err := p.fromBot(ctx, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -116,16 +116,19 @@ func (p Poller) linked(ctx context.Context, id string) (*domain.Linked, error) {
 	if strings.TrimSpace(text) == "" && len(raw.Attachments) != 0 {
 		text = "[photo]"
 	}
-	return &domain.Linked{ID: raw.ID, Sender: raw.Sender, Text: text, SentAt: raw.SentAt, FromBot: own}, nil
+	return &domain.Linked{ID: raw.ID, Sender: raw.Sender, Text: text, SentAt: raw.SentAt, FromBot: own, Tag: tag}, nil
 }
 
-func (p Poller) fromBot(ctx context.Context, raw domain.Message) (bool, error) {
-	if domain.HasReplyPrefix(raw.Text) {
-		return true, nil
+func (p Poller) fromBot(ctx context.Context, raw domain.Message) (bool, string, error) {
+	tag, known, err := p.Store.ReplyTag(ctx, raw.ID)
+	if known || err != nil {
+		return known, tag, err
 	}
-	known, err := p.Store.KnownReplyID(ctx, raw.ID)
-	if known || err != nil || raw.Sender != p.Group.Owner {
-		return known, err
+	if domain.HasReplyPrefix(raw.Text) {
+		return true, "", nil
+	}
+	if raw.Sender != p.Group.Owner {
+		return false, "", nil
 	}
 	for _, attachment := range raw.Attachments {
 		if attachment.Name == "" {
@@ -133,8 +136,8 @@ func (p Poller) fromBot(ctx context.Context, raw domain.Message) (bool, error) {
 		}
 		known, err := p.Store.KnownAttachment(ctx, attachment.Name)
 		if known || err != nil {
-			return known, err
+			return known, "", err
 		}
 	}
-	return false, nil
+	return false, "", nil
 }

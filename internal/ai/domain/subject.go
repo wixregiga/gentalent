@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	PhotoCount  = 3
-	StripFile   = "strip.jpg"
-	SourcesFile = "SOURCES.txt"
+	PhotoCount   = 3
+	StripFile    = "strip.jpg"
+	SourcesFile  = "SOURCES.txt"
+	ManifestFile = "manifest.json"
 
 	rawFolder    = "raw"
 	slugLimit    = 64
@@ -36,6 +37,10 @@ func (s Subject) StripPath() string {
 
 func (s Subject) SourcesPath() string {
 	return filepath.Join(s.Dir, SourcesFile)
+}
+
+func (s Subject) ManifestPath() string {
+	return filepath.Join(s.Dir, ManifestFile)
 }
 
 func slug(name string) string {

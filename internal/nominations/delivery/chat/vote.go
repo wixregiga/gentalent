@@ -16,13 +16,15 @@ var (
 	voteWords = map[string]domain.Vote{"yes": domain.Yes, "y": domain.Yes, "no": domain.No, "n": domain.No, "clear": domain.NotVoted, "c": domain.NotVoted}
 )
 
-const rangeUsage = "Name Nominations by number, e.g. !!Y 12 or !!Y 12-14."
-
 func (b *Bot) vote(ctx context.Context, from Member, msg Message, match []string) error {
 	text := strings.TrimSpace(msg.Text)
 	known, err := b.names.Handle(ctx)
 	if err != nil {
 		return err
+	}
+	var announced domain.Ref
+	if msg.ReplyTo != nil {
+		announced.Number = domain.NominationNumber(msg.ReplyTo.Announces)
 	}
 	starts := voteStart.FindAllStringSubmatchIndex(text, -1)
 	var ballots []domain.Ballot
@@ -34,18 +36,16 @@ func (b *Bot) vote(ctx context.Context, from Member, msg Message, match []string
 		choice := voteWords[strings.ToLower(text[start[2]:start[3]])]
 		named := names(known).leading(text[start[1]:end])
 		switch {
-		case named.badRange:
-			return b.say(ctx, msg, rangeUsage)
-		case named.suggestion != "":
-			return b.say(ctx, msg, didYouMean(named.suggestion))
+		case named.refused != "":
+			return b.say(ctx, msg, named.refused)
 		case len(named.refs) == 0:
-			ballots = append(ballots, domain.Ballot{Vote: choice})
+			ballots = append(ballots, domain.Ballot{Nomination: announced, Vote: choice})
 		}
 		for _, ref := range named.refs {
 			ballots = append(ballots, domain.Ballot{Nomination: ref, Vote: choice})
 		}
 	}
-	cmd := command.CastVote{MessageID: msg.ID, By: from.ID, Ballots: ballots, At: msg.SentAt}
+	cmd := command.CastVote{MessageID: msg.ID, By: from.ID, Ballots: ballots, At: b.config.Now()}
 	return b.castVote.Handle(ctx, cmd, present(b, msg.ID, nil, func(w wording, outcomes []domain.VoteOutcome) []port.Reply {
 		return w.voteReplies(outcomes)
 	}))
@@ -82,8 +82,4 @@ func (w wording) voteText(outcome domain.VoteOutcome) string {
 	members := len(w.bot.config.Members)
 	return lines(headline, fmt.Sprintf("%d/%d votes in. Result in 1 minute.", members, members),
 		"Finish now: !final ("+w.member(nomination.Nominator)+")")
-}
-
-func didYouMean(suggestion string) string {
-	return "Did you mean " + literal(suggestion) + "? Name them exactly as the bot shows them."
 }

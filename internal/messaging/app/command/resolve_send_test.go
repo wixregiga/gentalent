@@ -17,15 +17,15 @@ func (r *resolutionStore) Reply(context.Context, string) (domain.Reply, error) {
 func (r *resolutionStore) FinalIDUsed(context.Context, string, string) (bool, error) {
 	return r.dup, nil
 }
-func (r *resolutionStore) Transition(_ context.Context, key string, from, to domain.State, id string) (bool, error) {
+func (r *resolutionStore) Transition(_ context.Context, key string, from, to domain.State, id string) (domain.State, error) {
 	if r.stale || r.reply.Key != key || r.reply.State != from {
-		return false, nil
+		return "", nil
 	}
 	r.reply.State = to
 	if id != "" {
 		r.reply.FinalID = id
 	}
-	return true, nil
+	return to, nil
 }
 
 type resolutionFile struct {

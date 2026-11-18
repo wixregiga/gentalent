@@ -12,13 +12,13 @@ type ReplyWriter interface {
 
 type DeliveryStore interface {
 	ActiveReplies(context.Context) ([]domain.Reply, error)
-	Transition(context.Context, string, domain.State, domain.State, string) (bool, error)
+	Transition(ctx context.Context, key string, from, to domain.State, id string) (recorded domain.State, err error)
 }
 
 type ResolutionStore interface {
 	Reply(context.Context, string) (domain.Reply, error)
 	FinalIDUsed(context.Context, string, string) (bool, error)
-	Transition(context.Context, string, domain.State, domain.State, string) (bool, error)
+	Transition(ctx context.Context, key string, from, to domain.State, id string) (recorded domain.State, err error)
 }
 
 type TaggedReplyReader interface {

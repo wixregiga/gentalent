@@ -53,8 +53,14 @@ func (p *pollStore) SavePage(_ context.Context, before, after string, items []po
 	p.baseline.Cursor = after
 	return nil
 }
-func (p *pollStore) KnownReplyID(_ context.Context, id string) (bool, error) {
-	return id == "pending-id" || id == "final-id", nil
+func (p *pollStore) ReplyTag(_ context.Context, id string) (string, bool, error) {
+	switch id {
+	case "pending-id":
+		return "", true, nil
+	case "final-id":
+		return "announces/2", true, nil
+	}
+	return "", false, nil
 }
 func (p *pollStore) KnownAttachment(_ context.Context, name string) (bool, error) {
 	return name == "strip.jpg", nil
@@ -174,5 +180,31 @@ func TestPollLoadsEveryLinkedMessageAndMarksAFailedLoadMissing(t *testing.T) {
 	}
 	if store.items[0].Message.Linked != nil || store.items[1].Message.Linked == nil || !store.items[1].Message.Linked.Missing {
 		t.Fatalf("linked messages = %+v, %+v", store.items[0].Message.Linked, store.items[1].Message.Linked)
+	}
+}
+
+func TestALinkedBotReplyCarriesItsOutboxTag(t *testing.T) {
+	at := time.Now().UTC()
+	group := domain.Group{ChatID: "group", AccountID: "account", Owner: "alex", Members: []string{"alex", "blair"}}
+	vote := domain.Message{ID: "vote", ChatID: "group", AccountID: "account", Sender: "blair", SentAt: at, Text: "!!Y", LinkedID: "final-id"}
+	other := vote
+	other.ID, other.LinkedID = "other", "prefixed"
+	announcement := domain.Message{ID: "final-id", ChatID: "group", AccountID: "account", Sender: "alex", SentAt: at, Text: "@gentalent-bot says: Vote"}
+	prefixed := announcement
+	prefixed.ID = "prefixed"
+	store := &pollStore{baseline: port.Baseline{Cursor: "start", ArmedAt: at}}
+	p := Poller{
+		Platform: pollPlatform{
+			pages:    map[string]port.Page{"start": {Messages: []domain.Message{vote, other}}},
+			messages: map[string]domain.Message{"final-id": announcement, "prefixed": prefixed},
+		},
+		Store: store, Group: group,
+	}
+	if err := p.Poll(t.Context()); err != nil || len(store.items) != 2 {
+		t.Fatalf("poll = %+v, %v", store.items, err)
+	}
+	tagged, untagged := store.items[0].Message.Linked, store.items[1].Message.Linked
+	if !tagged.FromBot || tagged.Tag != "announces/2" || !untagged.FromBot || untagged.Tag != "" {
+		t.Fatalf("D35 a linked bot reply carries the tag of its outbox reply, got %+v and %+v", tagged, untagged)
 	}
 }

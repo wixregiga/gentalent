@@ -30,11 +30,11 @@ func (r Resolver) ResolveSend(ctx context.Context, key, messageID string) error 
 		}
 		next = domain.Sent
 	}
-	changed, err := r.Store.Transition(ctx, key, reply.State, next, messageID)
+	recorded, err := r.Store.Transition(ctx, key, reply.State, next, messageID)
 	if err != nil {
 		return err
 	}
-	if !changed {
+	if recorded != next {
 		return fmt.Errorf("reply %s changed while resolving or its message ID was claimed by another reply", key)
 	}
 	return nil

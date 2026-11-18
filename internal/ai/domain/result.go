@@ -5,4 +5,5 @@ type Result struct {
 	Strip    string
 	Sources  string
 	Provider string
+	Summary  string
 }

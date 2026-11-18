@@ -25,7 +25,7 @@ type BaselineStore interface {
 type PollStore interface {
 	Baseline(context.Context) (Baseline, error)
 	SavePage(context.Context, string, string, []InboxItem) error
-	KnownReplyID(context.Context, string) (bool, error)
+	ReplyTag(ctx context.Context, messageID string) (tag string, known bool, err error)
 	KnownAttachment(context.Context, string) (bool, error)
 }
 

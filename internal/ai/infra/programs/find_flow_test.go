@@ -25,7 +25,7 @@ func TestFindFallsBackFromAFailingCodexToClaudeWithRealImages(t *testing.T) {
 	agy := installFake(t, "agy", `exit 9`)
 	finder, err := command.NewFinder(
 		[]domain.Provider{{CLI: "codex", Model: "m"}, {CLI: "claude", Model: "sonnet"}, {CLI: "agy", Model: "g"}},
-		Programs(), newTestMagick(t), SourcesFile{})
+		Programs(), newTestMagick(t), SearchFiles{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestFindFallsBackFromAFailingCodexToClaudeWithRealImages(t *testing.T) {
 	if want := filepath.Join(dir, "01_aster_example.jpg"); result.Photos[0] != want {
 		t.Errorf("first photo %s, want %s", result.Photos[0], want)
 	}
-	for _, photo := range append(result.Photos, result.Strip, result.Sources) {
+	for _, photo := range append(result.Photos, result.Strip, result.Sources, filepath.Join(dir, "manifest.json")) {
 		if info, err := os.Stat(photo); err != nil || info.Size() == 0 {
 			t.Errorf("%s missing or empty: %v", photo, err)
 		}
@@ -62,7 +62,7 @@ func TestFindWritesOnlyInsideTheSubjectFolder(t *testing.T) {
 	installFake(t, "agy", paintRawPhotos(t)+"\n"+printManifest("%s"))
 	parent := t.TempDir()
 	dir := filepath.Join(parent, "1-aster")
-	finder, err := command.NewFinder([]domain.Provider{{CLI: "agy", Model: "g"}}, map[string]port.Agent{"agy": Agy{}}, newTestMagick(t), SourcesFile{})
+	finder, err := command.NewFinder([]domain.Provider{{CLI: "agy", Model: "g"}}, map[string]port.Agent{"agy": Agy{}}, newTestMagick(t), SearchFiles{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestFindGivesUpWithEveryReasonWhenNoProviderDelivers(t *testing.T) {
 	installFake(t, "claude", `echo "claude is down" >&2; exit 1`)
 	installFake(t, "agy", `echo "not json"`)
 	finder, err := command.NewFinder(
-		[]domain.Provider{{CLI: "claude", Model: "sonnet"}, {CLI: "agy", Model: "g"}}, Programs(), newTestMagick(t), SourcesFile{})
+		[]domain.Provider{{CLI: "claude", Model: "sonnet"}, {CLI: "agy", Model: "g"}}, Programs(), newTestMagick(t), SearchFiles{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -47,11 +47,8 @@ func (b *Bot) shameOver(ctx context.Context, from Member, msg Message, match []s
 		return err
 	}
 	about := names(known).leading(body)
-	switch {
-	case about.badRange:
-		return b.say(ctx, msg, rangeUsage)
-	case about.suggestion != "":
-		return b.say(ctx, msg, didYouMean(about.suggestion))
+	if about.refused != "" {
+		return b.say(ctx, msg, about.refused)
 	}
 	if len(about.refs) > 0 {
 		shame.About = about.refs[0]

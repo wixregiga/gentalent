@@ -2,6 +2,7 @@ package chat
 
 import (
 	"fmt"
+	"strconv"
 
 	"gentalent/internal/nominations/domain"
 )
@@ -69,7 +70,7 @@ func (w wording) refusal(r domain.Refusal) (string, bool) {
 	case domain.NothingToShame:
 		return "There's no nominee to shame anyone over yet.", true
 	case domain.UnknownNomination:
-		return fmt.Sprintf("There is no Nomination %d.", r.Ref.Number), true
+		return noNomination(strconv.Itoa(int(r.Ref.Number))), true
 	case domain.NominationClosed:
 		return "Finished already: " + w.name(first) + ".", true
 	case domain.NoOpenNomination:

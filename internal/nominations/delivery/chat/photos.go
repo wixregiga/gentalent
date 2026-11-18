@@ -35,7 +35,7 @@ func (b *Bot) AttachPhotos(ctx context.Context, result PhotoResult) error {
 	number := domain.NominationNumber(result.Nomination)
 	cmd := command.FinishPhotoSearch{Nomination: number, Found: result.Failure == "", Strip: result.Strip}
 	if cmd.Found {
-		cmd.Exhibit = fmt.Sprintf("AI media (%s) [sources: %s]", result.Provider, result.Sources)
+		cmd.Exhibit = fmt.Sprintf("AI media (%s): %s [sources: %s]", result.Provider, result.Summary, result.Sources)
 	}
 	return b.finish.Handle(ctx, cmd, present(b, fmt.Sprintf("photos/%d", number), nil, func(w wording, nomination domain.Nomination) []port.Reply {
 		if !cmd.Found {

@@ -128,6 +128,9 @@ func (f *fakePorts) Standing(context.Context) (port.Standing, error) {
 			standing.Searching = append(standing.Searching, n.Number)
 		}
 		standing.Latest = view
+		if n.Open() {
+			continue
+		}
 		if _, seen := latest[n.Person.ID]; !seen {
 			order = append(order, n.Person.ID)
 		}

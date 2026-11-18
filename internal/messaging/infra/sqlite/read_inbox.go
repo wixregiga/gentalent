@@ -24,12 +24,15 @@ func (s *Store) Next(ctx context.Context) (*domain.Incoming, error) {
 	return &next, nil
 }
 
-func (s *Store) KnownReplyID(ctx context.Context, id string) (bool, error) {
-	var exists bool
+func (s *Store) ReplyTag(ctx context.Context, messageID string) (string, bool, error) {
+	var tag string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT EXISTS(SELECT 1 FROM outbox WHERE (pending_id=? AND pending_id<>'') OR (final_id=? AND final_id<>''))
-	`, id, id).Scan(&exists)
-	return exists, err
+		SELECT tag FROM outbox WHERE (pending_id=? AND pending_id<>'') OR (final_id=? AND final_id<>'') ORDER BY rowid LIMIT 1
+	`, messageID, messageID).Scan(&tag)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	return tag, err == nil, err
 }
 
 func (s *Store) KnownAttachment(ctx context.Context, name string) (bool, error) {

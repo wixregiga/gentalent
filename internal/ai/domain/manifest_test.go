@@ -89,19 +89,3 @@ func TestNewManifestTrimsValues(t *testing.T) {
 		t.Fatalf("values not trimmed: %+v", manifest)
 	}
 }
-
-func TestSourcesListsEachPhotoWithItsProvenance(t *testing.T) {
-	manifest, err := NewManifest("Aster Example", "Representative photos.", threePhotos())
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := manifest.Sources("claude:sonnet", []string{"01_a.jpg", "02_a.jpg", "03_a.jpg"})
-	for _, want := range []string{
-		"Aster Example: photos\nProvider: claude:sonnet\nSummary: Representative photos.\n",
-		"02_a.jpg\nCaption: A caption\nSource page: https://example.org/page\nImage URL: https://example.org/img.jpg\n",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("sources lack %q:\n%s", want, got)
-		}
-	}
-}

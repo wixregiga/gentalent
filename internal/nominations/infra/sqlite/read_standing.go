@@ -17,8 +17,9 @@ func NewReader(db *sql.DB) Reader {
 	return Reader{db: db}
 }
 
-const latestOfEachPerson = `SELECT p.name FROM nominations n JOIN persons p ON p.id = n.person_id
-	WHERE n.number = (SELECT MAX(m.number) FROM nominations m WHERE m.person_id = n.person_id) AND n.status = ? ORDER BY n.number`
+const latestFinalizedOfEachPerson = `SELECT p.name FROM nominations n JOIN persons p ON p.id = n.person_id
+	WHERE n.number = (SELECT MAX(m.number) FROM nominations m WHERE m.person_id = n.person_id AND m.status <> 'nominated')
+	AND n.status = ? ORDER BY n.number`
 
 func (r Reader) Standing(ctx context.Context) (port.Standing, error) {
 	var standing port.Standing
@@ -99,7 +100,7 @@ func (r Reader) votes(ctx context.Context, number domain.NominationNumber) (map[
 }
 
 func (r Reader) names(ctx context.Context, status domain.CertificationStatus) ([]string, error) {
-	rows, err := r.db.QueryContext(ctx, latestOfEachPerson, status)
+	rows, err := r.db.QueryContext(ctx, latestFinalizedOfEachPerson, status)
 	if err != nil {
 		return nil, fmt.Errorf("read %s Persons: %w", status, err)
 	}

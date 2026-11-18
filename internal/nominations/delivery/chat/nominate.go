@@ -56,7 +56,7 @@ func (b *Bot) nominateAll(ctx context.Context, from Member, msg Message, match [
 	if problem != "" {
 		return b.say(ctx, msg, problem)
 	}
-	cmd := command.Nominate{MessageID: msg.ID, By: from.ID, Candidates: candidates, At: msg.SentAt}
+	cmd := command.Nominate{MessageID: msg.ID, By: from.ID, Candidates: candidates, At: b.config.Now()}
 	return b.nominate.Handle(ctx, cmd, present(b, msg.ID, typed, func(w wording, outcomes []domain.NominateOutcome) []port.Reply {
 		replies := make([]port.Reply, 0, len(outcomes))
 		for _, outcome := range outcomes {
@@ -75,7 +75,7 @@ func (b *Bot) renominateAll(ctx context.Context, from Member, msg Message, match
 	if problem != "" {
 		return b.say(ctx, msg, problem)
 	}
-	cmd := command.Renominate{MessageID: msg.ID, By: from.ID, Candidates: candidates, At: msg.SentAt}
+	cmd := command.Renominate{MessageID: msg.ID, By: from.ID, Candidates: candidates, At: b.config.Now()}
 	return b.renominate.Handle(ctx, cmd, present(b, msg.ID, typed, func(w wording, renominated []domain.Nomination) []port.Reply {
 		replies := make([]port.Reply, 0, len(renominated))
 		for _, nomination := range renominated {

@@ -2,6 +2,7 @@ package chat_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -92,6 +93,39 @@ func TestADueNominationIsFinalizedBeforeTheNextMessage(t *testing.T) {
 	}
 }
 
+func TestAVoteHandledAfterDowntimeLocksAtTheBotsClock(t *testing.T) {
+	h := newHarness(t, oneAtATime)
+	h.send(alex, "!gt Juno Vale. Pitch")
+	h.send(blair, "!!Y")
+	h.now = start.Add(10 * time.Minute)
+	replies := h.handle(chat.Message{Sender: string(casey.ID), Text: "!!Y", SentAt: start})
+	if len(replies) != 1 || !strings.Contains(replies[0].Text, "Result in 1 minute.") {
+		t.Fatalf("B65 the third vote locks, got %+v", replies)
+	}
+	ctx := context.Background()
+	if err := h.bot.FinalizeDue(ctx, h.now.Add(59*time.Second)); err != nil || len(h.fresh()) != 0 {
+		t.Fatalf("B65 B77 the minute starts when the bot applies the vote, not when it was sent: %v", err)
+	}
+	if err := h.bot.FinalizeDue(ctx, h.now.Add(time.Minute)); err != nil || len(h.fresh()) != 1 {
+		t.Fatalf("B77 the verdict comes a minute after the bot applied the vote: %v", err)
+	}
+	if got := h.nomination(1).FinalizedAt; !got.Equal(h.now.Add(time.Minute)) {
+		t.Fatalf("B176 a verdict is recorded at the bot's clock, got %v", got)
+	}
+}
+
+func TestFinalIsRecordedAtTheBotsClock(t *testing.T) {
+	h := newHarness(t, oneAtATime)
+	h.send(alex, "!gt Juno Vale. Pitch")
+	h.send(blair, "!!Y")
+	h.send(casey, "!!Y")
+	h.now = start.Add(30 * time.Second)
+	h.handle(chat.Message{Sender: string(alex.ID), Text: "!final", SentAt: start})
+	if got := h.nomination(1).FinalizedAt; !got.Equal(h.now) {
+		t.Fatalf("B176 !final records the verdict at the bot's clock, got %v", got)
+	}
+}
+
 func TestFinalByNumberAndName(t *testing.T) {
 	h := newHarness(t, severalOpen(3, 3))
 	h.send(alex, "!gt Juno Vale. Pitch !gt Remy Quill. Pitch")
@@ -105,6 +139,36 @@ func TestFinalByNumberAndName(t *testing.T) {
 	contains(t, h.say(alex, "!final 9"), "There is no Nomination 9.")
 	contains(t, h.say(alex, "!final juno vael"), "Did you mean Juno Vale?")
 	contains(t, h.say(alex, "!final"), "Congratulations Juno Vale (#1)!")
+}
+
+func TestAVoteReplyingToAnAnnouncementVotesOnThatNomination(t *testing.T) {
+	h := newHarness(t, severalOpen(3, 3))
+	h.send(alex, "!gt Juno Vale. Pitch !gt Remy Quill. Pitch")
+	replyTo := func(from chat.Member, text string, announces int) string {
+		t.Helper()
+		replies := h.handle(chat.Message{Sender: string(from.ID), Text: text, ReplyTo: &chat.Quoted{ID: "announcement", FromBot: true, Announces: announces}})
+		if len(replies) != 1 {
+			t.Fatalf("%q: want one reply, got %+v", text, replies)
+		}
+		return replies[0].Text
+	}
+	contains(t, replyTo(blair, "!!Y", 2), "@Blair has voted for Remy Quill (#2)")
+	if _, voted := h.nomination(1).Votes[blair.ID]; voted {
+		t.Fatal("Q7 the reply names the Nomination, so no other one is voted on")
+	}
+	contains(t, replyTo(casey, "!!N 1", 2), "@Casey has voted against Juno Vale (#1)")
+	if _, voted := h.nomination(2).Votes[casey.ID]; voted {
+		t.Fatal("Q7 a reference in the text wins over the reply")
+	}
+	h.send(blair, "!!Y 1")
+	h.send(casey, "!!Y 1")
+	h.send(alex, "!final 1")
+	if got := replyTo(casey, "!!N", 1); got != "Finished already: Juno Vale (#1)." {
+		t.Fatalf("Q7 a reply to a finished Nomination's announcement is refused, got %q", got)
+	}
+	if _, voted := h.nomination(2).Votes[casey.ID]; voted {
+		t.Fatal("Q7 a vote on a finished Nomination never lands on the only open one")
+	}
 }
 
 func TestReactionsVote(t *testing.T) {
