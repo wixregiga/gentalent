@@ -55,7 +55,7 @@ func (f Flusher) deliver(ctx context.Context, reply domain.Reply) error {
 
 func (f Flusher) send(ctx context.Context, reply domain.Reply) error {
 	claimed, err := f.Store.Transition(ctx, reply.Key, domain.Queued, domain.Sending, "")
-	if err != nil || !claimed {
+	if err != nil || claimed != domain.Sending {
 		return err
 	}
 	reply.State = domain.Sending
@@ -75,15 +75,18 @@ func (f Flusher) send(ctx context.Context, reply domain.Reply) error {
 }
 
 func (f Flusher) record(ctx context.Context, reply domain.Reply, state domain.State, id string) error {
-	changed, err := f.Store.Transition(ctx, reply.Key, reply.State, state, id)
+	recorded, err := f.Store.Transition(ctx, reply.Key, reply.State, state, id)
 	if err != nil {
 		return fmt.Errorf("record %s for reply %s: %w", state, reply.Key, err)
 	}
-	if !changed && reply.State == domain.Sending {
+	switch {
+	case recorded == "" && reply.State == domain.Sending:
 		return fmt.Errorf("reply %s changed while recording %s", reply.Key, state)
+	case recorded == "" || f.Log == nil:
+		return nil
+	case recorded != state:
+		f.Log.WarnContext(ctx, "message is already recorded for another reply; check the thread, then use resolve-send", "key", reply.Key, "message", id)
 	}
-	if changed && f.Log != nil {
-		f.Log.InfoContext(ctx, "reply delivery", "key", reply.Key, "status", state, "message", id)
-	}
+	f.Log.InfoContext(ctx, "reply delivery", "key", reply.Key, "status", recorded, "message", id)
 	return nil
 }

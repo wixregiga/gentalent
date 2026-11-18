@@ -37,24 +37,42 @@ func attachmentName(path string) string {
 	return filepath.Base(path)
 }
 
-func (s *Store) Transition(ctx context.Context, key string, from, to domain.State, id string) (bool, error) {
+const finalIDHeld = "SELECT EXISTS(SELECT 1 FROM outbox WHERE final_id=? AND final_id<>'' AND key<>?)"
+
+func (s *Store) Transition(ctx context.Context, key string, from, to domain.State, id string) (domain.State, error) {
 	if !from.Allows(to) {
-		return false, fmt.Errorf("invalid reply transition %s to %s", from, to)
+		return "", fmt.Errorf("invalid reply transition %s to %s", from, to)
 	}
-	result, err := s.db.ExecContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	if to == domain.Sent {
+		var held bool
+		if err := tx.QueryRowContext(ctx, finalIDHeld, id, key).Scan(&held); err != nil {
+			return "", err
+		}
+		switch {
+		case held && from.Allows(domain.Uncertain):
+			to, id = domain.Uncertain, ""
+		case held:
+			return "", nil
+		}
+	}
+	result, err := tx.ExecContext(ctx, `
 		UPDATE outbox SET status=?,
 		pending_id=CASE WHEN ?='pending' THEN ? ELSE pending_id END,
 		final_id=CASE WHEN ? IN ('sent','failed') AND ?<>'' THEN ? ELSE final_id END
 		WHERE key=? AND status=?
-		AND (? NOT IN ('uncertain','failed') OR ?<>'sent' OR ?='' OR NOT EXISTS (
-			SELECT 1 FROM outbox other WHERE other.final_id=? AND other.key<>?
-		))
-	`, to, to, id, to, id, id, key, from, from, to, id, id, key)
+	`, to, to, id, to, id, id, key, from)
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	count, err := result.RowsAffected()
-	return count == 1, err
+	if count, err := result.RowsAffected(); err != nil || count != 1 {
+		return "", err
+	}
+	return to, tx.Commit()
 }
 
 const replyColumns = "key,text,attachment,tag,status,pending_id,final_id,kind"
@@ -75,7 +93,7 @@ func (s *Store) Reply(ctx context.Context, key string) (domain.Reply, error) {
 
 func (s *Store) FinalIDUsed(ctx context.Context, key, id string) (bool, error) {
 	var exists bool
-	err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM outbox WHERE final_id=? AND final_id<>'' AND key<>?)", id, key).Scan(&exists)
+	err := s.db.QueryRowContext(ctx, finalIDHeld, id, key).Scan(&exists)
 	return exists, err
 }
 

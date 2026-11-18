@@ -23,7 +23,7 @@ func (s *flushStore) ActiveReplies(context.Context) ([]domain.Reply, error) {
 	}
 	return active, nil
 }
-func (s *flushStore) Transition(_ context.Context, key string, from, to domain.State, id string) (bool, error) {
+func (s *flushStore) Transition(_ context.Context, key string, from, to domain.State, id string) (domain.State, error) {
 	for i := range s.rows {
 		reply := &s.rows[i]
 		if reply.Key == key && reply.State == from && from.Allows(to) {
@@ -34,10 +34,10 @@ func (s *flushStore) Transition(_ context.Context, key string, from, to domain.S
 			case domain.Sent, domain.Failed:
 				reply.FinalID = id
 			}
-			return true, nil
+			return to, nil
 		}
 	}
-	return false, nil
+	return "", nil
 }
 
 type flushPlatform struct {

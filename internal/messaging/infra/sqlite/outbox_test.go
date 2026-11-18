@@ -38,8 +38,8 @@ func TestRestartNeverRequeuesClaimedReply(t *testing.T) {
 	must(t, s.StartWorker(ctx, "binding"))
 	must(t, s.Enqueue(ctx, []domain.Outgoing{{Key: "a", Text: "first"}, {Key: "b", Text: "second"}}))
 	change(t, ctx, s, "a", domain.Queued, domain.Sending, "")
-	if changed, err := s.Transition(ctx, "a", domain.Queued, domain.Sending, ""); changed || err != nil {
-		t.Fatalf("second worker claimed the reply: %v, %v", changed, err)
+	if recorded, err := s.Transition(ctx, "a", domain.Queued, domain.Sending, ""); recorded != "" || err != nil {
+		t.Fatalf("second worker claimed the reply: %q, %v", recorded, err)
 	}
 	must(t, s.Enqueue(ctx, []domain.Outgoing{{Key: "a", Text: "duplicate"}}))
 	must(t, s.StartWorker(ctx, "binding"))
@@ -57,9 +57,9 @@ func TestRestartNeverRequeuesClaimedReply(t *testing.T) {
 
 func change(t *testing.T, ctx context.Context, s *Store, key string, from, to domain.State, id string) {
 	t.Helper()
-	ok, err := s.Transition(ctx, key, from, to, id)
-	if err != nil || !ok {
-		t.Fatalf("transition %s %s to %s: %v, %v", key, from, to, ok, err)
+	recorded, err := s.Transition(ctx, key, from, to, id)
+	if err != nil || recorded != to {
+		t.Fatalf("transition %s %s to %s: recorded %q, %v", key, from, to, recorded, err)
 	}
 }
 
@@ -119,8 +119,31 @@ func TestStatusAndTagReadOnlyDeliveredEvidence(t *testing.T) {
 	if !used {
 		t.Fatal("missing duplicate final ID")
 	}
-	if changed, err := s.Transition(ctx, "uncertain", domain.Uncertain, domain.Sent, "delivered"); changed || err != nil {
-		t.Fatalf("duplicate resolution accepted: %v, %v", changed, err)
+	if recorded, err := s.Transition(ctx, "uncertain", domain.Uncertain, domain.Sent, "delivered"); recorded != "" || err != nil {
+		t.Fatalf("duplicate resolution accepted: %q, %v", recorded, err)
 	}
 	change(t, ctx, s, "failed", domain.Failed, domain.Sent, "failed-id")
+}
+
+func TestAFinalIDHeldByAnotherReplyIsNeverClaimedTwice(t *testing.T) {
+	s := openStore(t, "")
+	ctx := t.Context()
+	must(t, s.Enqueue(ctx, []domain.Outgoing{{Key: "first", Text: "first"}, {Key: "second", Text: "second"}}))
+	for _, key := range []string{"first", "second"} {
+		change(t, ctx, s, key, domain.Queued, domain.Sending, "")
+		change(t, ctx, s, key, domain.Sending, domain.Pending, key+"-pending")
+	}
+	change(t, ctx, s, "first", domain.Pending, domain.Sent, "delivered")
+	recorded, err := s.Transition(ctx, "second", domain.Pending, domain.Sent, "delivered")
+	must(t, err)
+	second, err := s.Reply(ctx, "second")
+	must(t, err)
+	if recorded != domain.Uncertain || second.State != domain.Uncertain || second.FinalID != "" || second.PendingID != "second-pending" {
+		t.Fatalf("a reply whose final ID another reply holds is recorded uncertain for an operator, got %+v", second)
+	}
+	first, err := s.Reply(ctx, "first")
+	must(t, err)
+	if first.State != domain.Sent || first.FinalID != "delivered" {
+		t.Fatalf("the reply that holds the final ID keeps it, got %+v", first)
+	}
 }
