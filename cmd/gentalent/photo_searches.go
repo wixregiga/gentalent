@@ -16,6 +16,7 @@ type photoSearches struct {
 	results chan chat.PhotoResult
 	group   *sync.WaitGroup
 	running int
+	kept    []chat.PhotoResult
 	log     *slog.Logger
 }
 

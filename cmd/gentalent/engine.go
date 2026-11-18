@@ -59,6 +59,9 @@ func (e *engine) run(ctx context.Context, once bool) error {
 	if err := e.bot.AbandonInterruptedSearches(ctx); err != nil {
 		return fmt.Errorf("abandon interrupted photo searches: %w", err)
 	}
+	if err := e.claimPhotoSearches(ctx); err != nil {
+		return err
+	}
 	if once {
 		return e.once(ctx)
 	}
@@ -69,7 +72,7 @@ func (e *engine) run(ctx context.Context, once bool) error {
 		case <-ctx.Done():
 			return nil
 		case result := <-e.photos.results:
-			e.report(ctx, e.attach(ctx, result))
+			e.report(ctx, errors.Join(e.attach(ctx, result), e.relay(ctx)))
 		case <-next.C:
 			e.report(ctx, e.cycle(ctx))
 			next.Reset(e.pollEvery)
@@ -101,14 +104,16 @@ func (e *engine) report(ctx context.Context, err error) {
 }
 
 func (e *engine) cycle(ctx context.Context) error {
+	attached := e.attachKept(ctx)
 	if err := e.poller.Poll(ctx); err != nil {
-		return fmt.Errorf("poll: %w", err)
+		return errors.Join(attached, fmt.Errorf("poll: %w", err))
 	}
 	inbox := e.applyInbox(ctx)
+	claimed := e.claimPhotoSearches(ctx)
 	reactions := e.countReactions(ctx)
 	due := e.bot.FinalizeDue(ctx, e.now())
 	relay := e.relay(ctx)
-	return errors.Join(inbox, reactions, due, relay, e.flusher.Flush(ctx))
+	return errors.Join(attached, inbox, claimed, reactions, due, relay, e.flusher.Flush(ctx))
 }
 
 func (e *engine) applyInbox(ctx context.Context) error {
@@ -119,9 +124,6 @@ func (e *engine) applyInbox(ctx context.Context) error {
 		}
 		if err := e.apply(ctx, *incoming); err != nil {
 			return fmt.Errorf("message %s waits for the next poll: %w", incoming.ID, err)
-		}
-		if err := e.claimPhotoSearches(ctx); err != nil {
-			return err
 		}
 	}
 }
@@ -214,9 +216,20 @@ func (e *engine) claimPhotoSearches(ctx context.Context) error {
 }
 
 func (e *engine) attach(ctx context.Context, result chat.PhotoResult) error {
-	e.photos.running--
 	if err := e.bot.AttachPhotos(ctx, result); err != nil {
-		return fmt.Errorf("attach photos to nomination %d: %w", result.Nomination, err)
+		e.photos.kept = append(e.photos.kept, result)
+		return fmt.Errorf("attach photos to nomination %d, retried next poll: %w", result.Nomination, err)
 	}
-	return e.relay(ctx)
+	e.photos.running--
+	return nil
+}
+
+func (e *engine) attachKept(ctx context.Context) error {
+	kept := e.photos.kept
+	e.photos.kept = nil
+	var err error
+	for _, result := range kept {
+		err = errors.Join(err, e.attach(ctx, result))
+	}
+	return err
 }
