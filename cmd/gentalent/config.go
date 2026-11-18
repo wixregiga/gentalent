@@ -49,6 +49,8 @@ type configProvider struct {
 	Model string `json:"model"`
 }
 
+const mostNominationsPerMessage = 10
+
 var limitKeys = map[domain.Limit]string{
 	domain.GroupOpenNominationLimit:     "group_open_nomination_limit",
 	domain.MemberOpenNominationLimit:    "member_open_nomination_limit",
@@ -141,6 +143,9 @@ func (c config) validateGroup() error {
 	}
 	if c.PollSeconds < 1 || c.PollSeconds > 3600 {
 		return errors.New("poll_seconds must be between 1 and 3600")
+	}
+	if c.SingleMessageNominationLimit > mostNominationsPerMessage {
+		return fmt.Errorf("single_message_nomination_limit is %d; it must be at most %d", c.SingleMessageNominationLimit, mostNominationsPerMessage)
 	}
 	return nil
 }

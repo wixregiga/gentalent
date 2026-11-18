@@ -81,6 +81,7 @@ func TestEveryInvalidSettingNamesItsKey(t *testing.T) {
 		{"members", func(v map[string]any) { v["members"].([]map[string]string)[2]["name"] = " " }},
 		{"photo_layout", func(v map[string]any) { v["photo_layout"] = "grid" }},
 		{"poll_seconds", func(v map[string]any) { v["poll_seconds"] = 0.5 }},
+		{"single_message_nomination_limit is 11", func(v map[string]any) { v["single_message_nomination_limit"] = 11 }},
 		{"announce_reaction_votes", func(v map[string]any) { v["announce_reaction_votes"] = "yes" }},
 		{"media_dir", func(v map[string]any) { delete(v, "media_dir") }},
 		{"photo_search_workers", func(v map[string]any) { v["photo_search_workers"] = 0 }},
@@ -112,6 +113,18 @@ func TestTheExampleConfigLoadsAndRefusesItsPlaceholders(t *testing.T) {
 	}
 	if cfg.settings().GroupOpenNominationLimit != 1 || cfg.PhotoSearchWorkers != 3 || len(cfg.AIProviders) != 3 {
 		t.Fatalf("the example shows the defaults: %+v", cfg)
+	}
+}
+
+func TestTenNominationsInOneMessageIsTheHighestLimit(t *testing.T) {
+	for limit, valid := range map[int]bool{10: true, 11: false} {
+		cfg, err := loadConfig(writeConfig(t, t.TempDir(), func(v map[string]any) { v["single_message_nomination_limit"] = limit }))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := cfg.validateGroup(); (err == nil) != valid {
+			t.Fatalf("Q8 single_message_nomination_limit %d: valid %v, got %v", limit, valid, err)
+		}
 	}
 }
 
