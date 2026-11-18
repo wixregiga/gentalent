@@ -10,6 +10,7 @@ import (
 
 type mediaJSON struct {
 	NomineeName  string   `json:"nominee_name"`
+	Summary      string   `json:"summary"`
 	ProviderUsed string   `json:"provider_used"`
 	StripPath    string   `json:"strip_path"`
 	PhotoPaths   []string `json:"photo_paths"`
@@ -38,6 +39,6 @@ func generateMedia(ctx context.Context, call invocation, args []string) error {
 		return err
 	}
 	return printJSON(call.out, mediaJSON{
-		NomineeName: name[0], ProviderUsed: found.Provider, StripPath: found.Strip, PhotoPaths: found.Photos, SourcesPath: found.Sources,
+		NomineeName: name[0], Summary: found.Summary, ProviderUsed: found.Provider, StripPath: found.Strip, PhotoPaths: found.Photos, SourcesPath: found.Sources,
 	})
 }
