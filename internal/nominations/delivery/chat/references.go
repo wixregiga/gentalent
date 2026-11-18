@@ -18,6 +18,8 @@ const (
 	rangeLimit          = 50
 )
 
+const rangeUsage = "Name Nominations by number, e.g. !!Y 12 or !!Y 12-14."
+
 var (
 	numberReference = regexp.MustCompile(`^#?(\d+)(?:\s*-\s*#?(\d+))?(?:$|[\s.,:;!?])`)
 	possessive      = regexp.MustCompile(`(?i)['’]s$`)
@@ -25,10 +27,9 @@ var (
 )
 
 type reference struct {
-	refs       []domain.Ref
-	rest       string
-	suggestion string
-	badRange   bool
+	refs    []domain.Ref
+	rest    string
+	refused string
 }
 
 type names []port.Name
@@ -51,21 +52,29 @@ func (known names) leading(text string) reference {
 			}
 		}
 	}
-	return reference{rest: text, suggestion: known.nearMiss(words)}
+	if suggestion := known.nearMiss(words); suggestion != "" {
+		return reference{refused: didYouMean(suggestion)}
+	}
+	return reference{rest: text}
 }
 
 func numbered(match []string, rest string) reference {
-	low, _ := strconv.Atoi(match[1])
+	low, err := strconv.Atoi(match[1])
+	if err != nil {
+		return reference{refused: noNomination(match[1])}
+	}
 	high := low
 	if match[2] != "" {
-		high, _ = strconv.Atoi(match[2])
+		if high, err = strconv.Atoi(match[2]); err != nil {
+			return reference{refused: noNomination(match[2])}
+		}
 	}
 	if low < 1 || high < low || high-low >= rangeLimit {
-		return reference{badRange: true}
+		return reference{refused: rangeUsage}
 	}
-	refs := make([]domain.Ref, 0, high-low+1)
-	for number := low; number <= high; number++ {
-		refs = append(refs, domain.Ref{Number: domain.NominationNumber(number)})
+	refs := make([]domain.Ref, high-low+1)
+	for offset := range refs {
+		refs[offset] = domain.Ref{Number: domain.NominationNumber(low + offset)}
 	}
 	return reference{refs: refs, rest: rest}
 }
@@ -94,4 +103,12 @@ func (known names) nearMiss(words []string) string {
 		}
 	}
 	return best
+}
+
+func didYouMean(suggestion string) string {
+	return "Did you mean " + literal(suggestion) + "? Name them exactly as the bot shows them."
+}
+
+func noNomination(number string) string {
+	return "There is no Nomination " + number + "."
 }

@@ -20,10 +20,8 @@ func (b *Bot) final(ctx context.Context, from Member, msg Message, match []strin
 		}
 		reference := names(known).leading(body)
 		switch {
-		case reference.badRange:
-			return b.say(ctx, msg, rangeUsage)
-		case reference.suggestion != "":
-			return b.say(ctx, msg, didYouMean(reference.suggestion))
+		case reference.refused != "":
+			return b.say(ctx, msg, reference.refused)
 		case len(reference.refs) == 0:
 			return nil
 		}

@@ -170,3 +170,25 @@ func TestALongRangeIsRefused(t *testing.T) {
 		t.Fatalf("a range of 50 or more Nominations is refused, got %q", got)
 	}
 }
+
+func TestANumberBeyondAnyNominationIsAnUnknownNomination(t *testing.T) {
+	h := newHarness(t, oneAtATime)
+	h.send(alex, "!gt Juno Vale. Pitch")
+	for _, number := range []string{"9223372036854775807", "99999999999999999999"} {
+		if got := h.say(blair, "!!Y "+number); got != "There is no Nomination "+number+"." {
+			t.Fatalf("Q17 !!Y %s is refused like any unknown number, got %q", number, got)
+		}
+		if got := h.say(alex, "!final "+number); got != "There is no Nomination "+number+"." {
+			t.Fatalf("Q17 !final %s is refused like any unknown number, got %q", number, got)
+		}
+	}
+	if got := h.say(blair, "!!Y 9223372036854775806-9223372036854775807"); got != "There is no Nomination 9223372036854775806." {
+		t.Fatalf("Q17 a range at the top of the numbers is refused, got %q", got)
+	}
+	if got := h.say(blair, "!!Y 1-99999999999999999999"); got != "There is no Nomination 99999999999999999999." {
+		t.Fatalf("Q17 a range ending beyond any number is refused, got %q", got)
+	}
+	if len(h.nomination(1).Votes) != 1 {
+		t.Fatal("Q17 no vote lands on another Nomination")
+	}
+}
