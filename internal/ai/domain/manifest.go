@@ -57,25 +57,6 @@ func NewManifest(canonicalName, summary string, photos []PhotoSource) (Manifest,
 	return Manifest{CanonicalName: name, Summary: about, Photos: checked}, nil
 }
 
-func (m Manifest) Sources(provider string, savedPhotos []string) string {
-	lines := []string{
-		m.CanonicalName + ": photos",
-		"Provider: " + provider,
-		"Summary: " + m.Summary,
-		"",
-	}
-	for i, photo := range m.Photos {
-		lines = append(lines,
-			savedPhotos[i],
-			"Caption: "+photo.Caption,
-			"Source page: "+photo.PageURL,
-			"Image URL: "+photo.ImageURL,
-			"",
-		)
-	}
-	return strings.Join(lines, "\n")
-}
-
 func boundedText(field, value string, limit int) (string, error) {
 	trimmed := strings.TrimSpace(value)
 	if n := utf8.RuneCountInString(trimmed); n < 1 || n > limit {

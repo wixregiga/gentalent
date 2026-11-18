@@ -138,7 +138,7 @@ func TestFoundPhotos(t *testing.T) {
 			if _, err := h.bot.ClaimPhotoSearches(context.Background()); err != nil {
 				t.Fatal(err)
 			}
-			result := chat.PhotoResult{Nomination: 1, Photos: []string{"/p/01.jpg", "/p/02.jpg", "/p/03.jpg"}, Strip: "/p/strip.jpg", Provider: "codex", Sources: "/p/SOURCES.txt"}
+			result := chat.PhotoResult{Nomination: 1, Photos: []string{"/p/01.jpg", "/p/02.jpg", "/p/03.jpg"}, Strip: "/p/strip.jpg", Provider: "codex", Summary: "Pioneer of orbital math.", Sources: "/p/SOURCES.txt"}
 			if err := h.bot.AttachPhotos(context.Background(), result); err != nil {
 				t.Fatal(err)
 			}
@@ -151,7 +151,7 @@ func TestFoundPhotos(t *testing.T) {
 				t.Fatalf("B51 individual: each photo alone with no text, in order, got %+v", replies)
 			}
 			got := h.nomination(1)
-			if got.Strip != "/p/strip.jpg" || got.Exhibits[len(got.Exhibits)-1] != "AI media (codex) [sources: /p/SOURCES.txt]" {
+			if got.Strip != "/p/strip.jpg" || got.Exhibits[len(got.Exhibits)-1] != "AI media (codex): Pioneer of orbital math. [sources: /p/SOURCES.txt]" {
 				t.Fatalf("B50 the strip and an AI media exhibit are kept, got %+v", got)
 			}
 		})

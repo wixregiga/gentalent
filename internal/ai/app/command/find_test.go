@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -53,13 +54,14 @@ func (i *fakeImages) Stitch(_ context.Context, photos []string, destination stri
 	return nil
 }
 
-type fakeSources struct {
-	path string
-	text string
+type fakeRecord struct {
+	subject  domain.Subject
+	manifest domain.Manifest
+	result   domain.Result
 }
 
-func (s *fakeSources) WriteSources(path, text string) error {
-	s.path, s.text = path, text
+func (r *fakeRecord) Record(subject domain.Subject, manifest domain.Manifest, result domain.Result) error {
+	r.subject, r.manifest, r.result = subject, manifest, result
 	return nil
 }
 
@@ -75,9 +77,9 @@ var threeFiles = manifestOf("01.jpg", "02.jpg", "03.jpg")
 
 var codex, claude, agy = domain.Provider{CLI: "codex", Model: "m1"}, domain.Provider{CLI: "claude", Model: "sonnet"}, domain.Provider{CLI: "agy"}
 
-func newFinder(t *testing.T, providers []domain.Provider, agents map[string]port.Agent, images *fakeImages, sources *fakeSources) *Finder {
+func newFinder(t *testing.T, providers []domain.Provider, agents map[string]port.Agent, images *fakeImages, record *fakeRecord) *Finder {
 	t.Helper()
-	finder, err := NewFinder(providers, agents, images, sources)
+	finder, err := NewFinder(providers, agents, images, record)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,9 +90,9 @@ func TestFindFallsBackThroughProvidersInOrderAndNamesTheWinner(t *testing.T) {
 	failing := &fakeAgent{err: errors.New("codex rate limit")}
 	working := &fakeAgent{manifest: threeFiles}
 	never := &fakeAgent{manifest: threeFiles}
-	images, sources := &fakeImages{}, &fakeSources{}
+	images, record := &fakeImages{}, &fakeRecord{}
 	finder := newFinder(t, []domain.Provider{codex, claude, agy},
-		map[string]port.Agent{"codex": failing, "claude": working, "agy": never}, images, sources)
+		map[string]port.Agent{"codex": failing, "claude": working, "agy": never}, images, record)
 	dir := t.TempDir()
 
 	result, err := finder.Find(context.Background(), domain.Subject{Name: "Aster Example", Pitch: "pitch", Dir: dir})
@@ -107,14 +109,17 @@ func TestFindFallsBackThroughProvidersInOrderAndNamesTheWinner(t *testing.T) {
 	if strings.Join(images.stitched, ",") != strings.Join(wantPhotos, ",") || images.stripPaths[0] != result.Strip {
 		t.Fatalf("strip built from %v into %v", images.stitched, images.stripPaths)
 	}
-	if sources.path != filepath.Join(dir, "SOURCES.txt") || !strings.Contains(sources.text, "Provider: claude:sonnet") {
-		t.Fatalf("sources %q: %s", sources.path, sources.text)
+	if result.Summary != "s" || result.Sources != filepath.Join(dir, "SOURCES.txt") {
+		t.Fatalf("B50 the result carries the summary and the sources file, got %+v", result)
+	}
+	if record.subject.Dir != dir || record.manifest.CanonicalName != "Aster Example" || !reflect.DeepEqual(record.result, result) {
+		t.Fatalf("B234 the finished search is recorded, got %+v", record)
 	}
 }
 
 func TestFindGivesEachProviderTheSubjectFolderAndAPromptNamingIt(t *testing.T) {
 	agent := &fakeAgent{manifest: threeFiles}
-	finder := newFinder(t, []domain.Provider{claude}, map[string]port.Agent{"claude": agent}, &fakeImages{}, &fakeSources{})
+	finder := newFinder(t, []domain.Provider{claude}, map[string]port.Agent{"claude": agent}, &fakeImages{}, &fakeRecord{})
 	dir := t.TempDir()
 	if _, err := finder.Find(context.Background(), domain.Subject{Name: "Aster Example", Pitch: "aka Ace", Dir: dir}); err != nil {
 		t.Fatal(err)
@@ -134,7 +139,7 @@ func TestFindFallsBackWhenADownloadedPhotoIsNotAValidImage(t *testing.T) {
 	bad := &fakeAgent{manifest: manifestOf("01.jpg", "bogus.jpg", "03.jpg")}
 	good := &fakeAgent{manifest: threeFiles}
 	images := &fakeImages{failCheck: "bogus.jpg"}
-	finder := newFinder(t, []domain.Provider{codex, claude}, map[string]port.Agent{"codex": bad, "claude": good}, images, &fakeSources{})
+	finder := newFinder(t, []domain.Provider{codex, claude}, map[string]port.Agent{"codex": bad, "claude": good}, images, &fakeRecord{})
 
 	result, err := finder.Find(context.Background(), domain.Subject{Name: "Aster", Dir: t.TempDir()})
 	if err != nil {
@@ -150,7 +155,7 @@ func TestFindReportsEveryProviderFailureWhenAllFail(t *testing.T) {
 		"codex":  &fakeAgent{err: errors.New("codex exited 1: rate limit")},
 		"claude": &fakeAgent{err: errors.New("claude exited 1: down")},
 	}
-	finder := newFinder(t, []domain.Provider{codex, claude}, agents, &fakeImages{}, &fakeSources{})
+	finder := newFinder(t, []domain.Provider{codex, claude}, agents, &fakeImages{}, &fakeRecord{})
 
 	_, err := finder.Find(context.Background(), domain.Subject{Name: "Aster", Dir: t.TempDir()})
 	want := "all configured subscription AI providers failed: codex (m1): codex exited 1: rate limit | claude (sonnet): claude exited 1: down"
@@ -163,7 +168,7 @@ func TestFindStopsWhenTheContextIsCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	first := &fakeAgent{err: errors.New("killed"), onRun: cancel}
 	second := &fakeAgent{manifest: threeFiles}
-	finder := newFinder(t, []domain.Provider{codex, claude}, map[string]port.Agent{"codex": first, "claude": second}, &fakeImages{}, &fakeSources{})
+	finder := newFinder(t, []domain.Provider{codex, claude}, map[string]port.Agent{"codex": first, "claude": second}, &fakeImages{}, &fakeRecord{})
 
 	_, err := finder.Find(ctx, domain.Subject{Name: "Aster", Dir: t.TempDir()})
 	if !errors.Is(err, context.Canceled) || len(second.tasks) != 0 {
@@ -173,10 +178,10 @@ func TestFindStopsWhenTheContextIsCancelled(t *testing.T) {
 
 func TestNewFinderRefusesProvidersItCannotRun(t *testing.T) {
 	agents := map[string]port.Agent{"claude": &fakeAgent{}}
-	if _, err := NewFinder(nil, agents, &fakeImages{}, &fakeSources{}); err == nil {
+	if _, err := NewFinder(nil, agents, &fakeImages{}, &fakeRecord{}); err == nil {
 		t.Error("no providers accepted")
 	}
-	_, err := NewFinder([]domain.Provider{claude, {CLI: "gemini"}}, agents, &fakeImages{}, &fakeSources{})
+	_, err := NewFinder([]domain.Provider{claude, {CLI: "gemini"}}, agents, &fakeImages{}, &fakeRecord{})
 	if err == nil || !strings.Contains(err.Error(), "gemini") {
 		t.Errorf("unknown CLI: %v", err)
 	}

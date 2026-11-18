@@ -16,10 +16,10 @@ type Finder struct {
 	providers []domain.Provider
 	agents    map[string]port.Agent
 	images    port.ImageTool
-	sources   port.SourcesWriter
+	record    port.SearchRecorder
 }
 
-func NewFinder(providers []domain.Provider, agents map[string]port.Agent, images port.ImageTool, sources port.SourcesWriter) (*Finder, error) {
+func NewFinder(providers []domain.Provider, agents map[string]port.Agent, images port.ImageTool, record port.SearchRecorder) (*Finder, error) {
 	if len(providers) == 0 {
 		return nil, errors.New("no AI providers configured")
 	}
@@ -28,7 +28,7 @@ func NewFinder(providers []domain.Provider, agents map[string]port.Agent, images
 			return nil, fmt.Errorf("unsupported CLI provider: %s", provider.CLI)
 		}
 	}
-	return &Finder{providers: providers, agents: agents, images: images, sources: sources}, nil
+	return &Finder{providers: providers, agents: agents, images: images, record: record}, nil
 }
 
 func (f *Finder) Find(ctx context.Context, subject domain.Subject) (domain.Result, error) {
@@ -66,10 +66,8 @@ func (f *Finder) attempt(ctx context.Context, provider domain.Provider, subject 
 		}
 	}
 	photos := make([]string, len(manifest.Photos))
-	savedNames := make([]string, len(manifest.Photos))
 	for i, source := range manifest.Photos {
 		photos[i] = subject.PhotoPath(i + 1)
-		savedNames[i] = filepath.Base(photos[i])
 		if err := f.images.Optimize(ctx, filepath.Join(subject.Raw(), source.File), photos[i]); err != nil {
 			return domain.Result{}, fmt.Errorf("optimizing photo %d: %w", i+1, err)
 		}
@@ -77,11 +75,11 @@ func (f *Finder) attempt(ctx context.Context, provider domain.Provider, subject 
 	if err := f.images.Stitch(ctx, photos, subject.StripPath()); err != nil {
 		return domain.Result{}, fmt.Errorf("creating the strip: %w", err)
 	}
-	label := provider.Label()
-	if err := f.sources.WriteSources(subject.SourcesPath(), manifest.Sources(label, savedNames)); err != nil {
-		return domain.Result{}, fmt.Errorf("writing sources: %w", err)
+	result := domain.Result{Photos: photos, Strip: subject.StripPath(), Sources: subject.SourcesPath(), Provider: provider.Label(), Summary: manifest.Summary}
+	if err := f.record.Record(subject, manifest, result); err != nil {
+		return domain.Result{}, fmt.Errorf("recording the search: %w", err)
 	}
-	return domain.Result{Photos: photos, Strip: subject.StripPath(), Sources: subject.SourcesPath(), Provider: label}, nil
+	return result, nil
 }
 
 type searchRequest struct {

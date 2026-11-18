@@ -42,5 +42,6 @@ type PhotoResult struct {
 	Strip      string
 	Failure    string
 	Provider   string
+	Summary    string
 	Sources    string
 }
