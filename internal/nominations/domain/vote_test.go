@@ -157,3 +157,45 @@ func TestThirdVoteByReactionStartsTheTimer(t *testing.T) {
 		t.Fatalf("B74 the timer starts at the reaction, got %v", got)
 	}
 }
+
+func TestCloseSpellingNamesOnlyAnOpenNomination(t *testing.T) {
+	sofia := domain.Person{ID: "sofíavergara", Name: "Sofía Vergara"}
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3},
+		finalized(1, grace, domain.Rejected), open(2, sofia, alex), open(3, ada, alex))
+	before := snapshot(group)
+
+	_, err := group.CastVote(blair.ID, []domain.Ballot{{Nomination: domain.Ref{Close: []domain.PersonID{grace.ID}}, Vote: domain.Yes}}, today)
+	refusal(t, err, domain.CloseSpellingNamesOnlyAnOpenNomination)
+	wantUnchanged(t, group, before)
+
+	outcomes, err := group.CastVote(blair.ID, []domain.Ballot{{Nomination: domain.Ref{Close: []domain.PersonID{grace.ID, sofia.ID}}, Vote: domain.Yes}}, today)
+	if err != nil {
+		t.Fatalf("a close spelling that fits one open Nomination must count: %v", err)
+	}
+	if len(outcomes) != 1 || outcomes[0].Number != 2 || !outcomes[0].ByCloseSpelling {
+		t.Fatalf("want one outcome on Nomination 2 marked as a close spelling, got %+v", outcomes)
+	}
+	if got := nomination(t, group, 2).Votes[blair.ID]; got != domain.Yes {
+		t.Fatalf("want Blair's yes on Nomination 2, got %v", got)
+	}
+	if got := nomination(t, group, 3).Votes[blair.ID]; got != domain.NotVoted {
+		t.Fatalf("a close spelling counts on its one Nomination only, got %v on Nomination 3", got)
+	}
+
+	exact, err := group.CastVote(casey.ID, []domain.Ballot{{Nomination: domain.Ref{Person: ada.ID}, Vote: domain.No}}, today)
+	if err != nil || len(exact) != 1 || exact[0].ByCloseSpelling {
+		t.Fatalf("an exact name is not a close spelling, got %+v, %v", exact, err)
+	}
+}
+
+func TestCloseSpellingNamesOneNomination(t *testing.T) {
+	adam := domain.Person{ID: "adamdriver", Name: "Adam Driver"}
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3},
+		open(1, ada, alex), open(2, adam, alex))
+	before := snapshot(group)
+
+	_, err := group.CastVote(blair.ID, []domain.Ballot{{Nomination: domain.Ref{Close: []domain.PersonID{ada.ID, adam.ID}}, Vote: domain.Yes}}, today)
+	refused := refusal(t, err, domain.CloseSpellingNamesOneNomination)
+	wantNumbers(t, refused.Numbers, 1, 2)
+	wantUnchanged(t, group, before)
+}

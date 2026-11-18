@@ -310,7 +310,7 @@ func TestReadStanding(t *testing.T) {
 		t.Fatalf("B158 every Nomination with its status and vote count, got %q", listed)
 	}
 	names, err := sqlite.NewReader(db).Names(context.Background())
-	if err != nil || len(names) != 2 || names[0].Person != "adalovelace" || names[1].Display != "Grace Hopper" {
-		t.Fatalf("names come latest Nomination first, got %+v, %v", names, err)
+	if err != nil || len(names) != 2 || names[0].Person != "adalovelace" || names[1].Display != "Grace Hopper" || !names[0].Open || names[1].Open {
+		t.Fatalf("names come latest Nomination first and say whose Nomination is open, got %+v, %v", names, err)
 	}
 }

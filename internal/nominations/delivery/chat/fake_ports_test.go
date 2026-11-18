@@ -155,7 +155,7 @@ func (f *fakePorts) Names(context.Context) ([]port.Name, error) {
 		person := f.nominations[i].Person
 		if !seen[person.ID] {
 			seen[person.ID] = true
-			names = append(names, port.Name{Alias: string(person.ID), Person: person.ID, Display: person.Name})
+			names = append(names, port.Name{Alias: string(person.ID), Person: person.ID, Display: person.Name, Open: f.nominations[i].Open()})
 		}
 	}
 	return names, nil

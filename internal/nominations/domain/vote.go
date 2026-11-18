@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -27,10 +28,11 @@ const (
 )
 
 type VoteOutcome struct {
-	Number NominationNumber
-	Member MemberID
-	Change VoteChange
-	Locks  bool
+	Number          NominationNumber
+	Member          MemberID
+	Change          VoteChange
+	Locks           bool
+	ByCloseSpelling bool
 }
 
 func (g *Group) CastVote(by MemberID, ballots []Ballot, at time.Time) ([]VoteOutcome, error) {
@@ -43,6 +45,12 @@ func (g *Group) CastVote(by MemberID, ballots []Ballot, at time.Time) ([]VoteOut
 		if err := next.AssertVoteNamesItsNomination(ballot.Nomination); err != nil {
 			return nil, err
 		}
+		if err := next.AssertCloseSpellingNamesOnlyAnOpenNomination(ballot.Nomination); err != nil {
+			return nil, err
+		}
+		if err := next.AssertCloseSpellingNamesOneNomination(ballot.Nomination); err != nil {
+			return nil, err
+		}
 		i, found, err := next.openFor(ballot.Nomination)
 		if err != nil {
 			return nil, err
@@ -53,7 +61,9 @@ func (g *Group) CastVote(by MemberID, ballots []Ballot, at time.Time) ([]VoteOut
 		if err := next.AssertVotesChangeUntilTheThirdVote(next.nominations[i]); err != nil {
 			return nil, err
 		}
-		outcomes = append(outcomes, next.vote(i, by, ballot.Vote, at))
+		outcome := next.vote(i, by, ballot.Vote, at)
+		outcome.ByCloseSpelling = byCloseSpelling(ballot.Nomination)
+		outcomes = append(outcomes, outcome)
 	}
 	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes()); err != nil {
 		return nil, err
@@ -94,6 +104,24 @@ func (g *Group) CountReactions(number NominationNumber, reactions map[MemberID]V
 func (g *Group) AssertVoteNamesItsNomination(ref Ref) error {
 	if open := g.open(); ref.Unnamed() && len(open) > 1 {
 		return Refusal{Rule: VoteNamesItsNomination, Numbers: numbers(open)}
+	}
+	return nil
+}
+
+func (g *Group) AssertCloseSpellingNamesOnlyAnOpenNomination(ref Ref) error {
+	if byCloseSpelling(ref) && len(g.closeMatches(ref)) == 0 {
+		return Refusal{Rule: CloseSpellingNamesOnlyAnOpenNomination, Ref: ref}
+	}
+	return nil
+}
+
+func (g *Group) AssertCloseSpellingNamesOneNomination(ref Ref) error {
+	if matches := g.closeMatches(ref); byCloseSpelling(ref) && len(matches) > 1 {
+		fits := make([]NominationNumber, len(matches))
+		for k, i := range matches {
+			fits[k] = g.nominations[i].Number
+		}
+		return Refusal{Rule: CloseSpellingNamesOneNomination, Numbers: fits}
 	}
 	return nil
 }
@@ -146,6 +174,12 @@ func (g *Group) openFor(ref Ref) (int, bool, error) {
 			return 0, false, Refusal{Rule: NoOpenNomination, Ref: ref}
 		}
 		return i, true, nil
+	case len(ref.Close) > 0:
+		matches := g.closeMatches(ref)
+		if len(matches) != 1 {
+			return 0, false, errors.Join(g.AssertCloseSpellingNamesOnlyAnOpenNomination(ref), g.AssertCloseSpellingNamesOneNomination(ref))
+		}
+		return matches[0], true, nil
 	}
 	open := g.open()
 	if len(open) == 0 {
@@ -153,4 +187,19 @@ func (g *Group) openFor(ref Ref) (int, bool, error) {
 	}
 	i, _ := g.index(open[0].Number)
 	return i, true, nil
+}
+
+func byCloseSpelling(ref Ref) bool {
+	return ref.Number == 0 && ref.Person == "" && len(ref.Close) > 0
+}
+
+func (g *Group) closeMatches(ref Ref) []int {
+	var matches []int
+	for _, person := range ref.Close {
+		if i, ok := g.openIndexOf(person); ok {
+			matches = append(matches, i)
+		}
+	}
+	slices.Sort(matches)
+	return slices.Compact(matches)
 }

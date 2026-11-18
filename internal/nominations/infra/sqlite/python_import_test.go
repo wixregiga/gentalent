@@ -170,7 +170,7 @@ func TestImportKeepsTheWholePythonHistory(t *testing.T) {
 		t.Fatalf("B185 feedback survives, got %+v, %v", entries, err)
 	}
 	names, err := reader.Names(context.Background())
-	if err != nil || len(names) != 3 || names[0] != (port.Name{Alias: "katherinejohnson", Person: "katherinejohnson", Display: "Katherine Johnson"}) {
+	if err != nil || len(names) != 3 || names[0] != (port.Name{Alias: "katherinejohnson", Person: "katherinejohnson", Display: "Katherine Johnson", Open: true}) {
 		t.Fatalf("B175 every alias points at its Person, got %+v, %v", names, err)
 	}
 

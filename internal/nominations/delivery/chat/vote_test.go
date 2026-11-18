@@ -261,3 +261,95 @@ func TestRelaying(t *testing.T) {
 		t.Fatal("a handled message ID does nothing")
 	}
 }
+
+func TestTheSofiaVergaraVote(t *testing.T) {
+	h := newHarness(t, severalOpen(6, 3))
+	h.send(alex, "!gt Sofía Vergara. Actress !gt Hachikō. The dog who waited")
+	want := "I think you meant Sofía Vergara (#1).  \n@Blair has voted for Sofía Vergara (#1) to be a generational talent!  \n2/3 votes in."
+	if got := h.say(blair, "!!Y Sofia "); got != want {
+		t.Fatalf("a close spelling of one open name counts on it:\ngot  %q\nwant %q", got, want)
+	}
+	if got := h.nomination(2).Votes[blair.ID]; got != domain.NotVoted {
+		t.Fatalf("the vote counts on Sofía Vergara only, got %v on Hachikō", got)
+	}
+}
+
+func TestCloseSpellingsOfOpenNames(t *testing.T) {
+	cases := []struct {
+		typed  string
+		number domain.NominationNumber
+	}{
+		{"Sofia", 1}, {"sofria", 1}, {"sofia vergera", 1}, {"vergara", 1}, {"SOFIA she rules", 1},
+		{"love", 2}, {"lovelace", 2}, {"ada", 2}, {"addaa", 2}, {"love it", 2},
+	}
+	for _, c := range cases {
+		h := newHarness(t, severalOpen(6, 3))
+		h.send(alex, "!gt Sofía Vergara. Actress !gt Ada Lovelace. Engines")
+		name := map[domain.NominationNumber]string{1: "Sofía Vergara (#1)", 2: "Ada Lovelace (#2)"}[c.number]
+		contains(t, h.say(blair, "!!Y "+c.typed), "I think you meant "+name+".")
+		if got := h.nomination(c.number).Votes[blair.ID]; got != domain.Yes {
+			t.Fatalf("%q must count on Nomination %d, got %v", c.typed, c.number, got)
+		}
+		if got := h.nomination(3 - c.number).Votes[blair.ID]; got != domain.NotVoted {
+			t.Fatalf("%q must not count on Nomination %d, got %v", c.typed, 3-c.number, got)
+		}
+	}
+}
+
+func TestCloseSpellingThatFitsTwoOpenNominationsNamesNone(t *testing.T) {
+	h := newHarness(t, severalOpen(6, 3))
+	h.send(alex, "!gt Ada Lovelace. Engines !gt Adam Driver. Acting")
+	contains(t, h.say(blair, "!!Y ada"), "Several Nominations are open. Name one", "Nomination 1: Ada Lovelace", "Nomination 2: Adam Driver")
+	for _, number := range []domain.NominationNumber{1, 2} {
+		if got := h.nomination(number).Votes[blair.ID]; got != domain.NotVoted {
+			t.Fatalf("a tie counts nowhere, got %v on Nomination %d", got, number)
+		}
+	}
+	contains(t, h.say(blair, "!!Y ada lovelace"), "@Blair has voted for Ada Lovelace (#1)")
+}
+
+func TestShortWordsAreNotCloseSpellings(t *testing.T) {
+	h := newHarness(t, severalOpen(6, 3))
+	h.send(alex, "!gt Yves Moreau. Painter !gt Ada Lovelace. Engines")
+	contains(t, h.say(blair, "!!Y yes"), "Several Nominations are open. Name one")
+	if got := h.nomination(1).Votes[blair.ID]; got != domain.NotVoted {
+		t.Fatalf("a three-letter word is never a close spelling, got %v on Yves Moreau", got)
+	}
+}
+
+func TestNumbersNeverBecomeCloseSpellings(t *testing.T) {
+	h := newHarness(t, severalOpen(6, 3))
+	h.send(alex, "!gt Juno Vale. Pitch")
+	h.send(blair, "!!Y")
+	h.send(casey, "!!Y")
+	h.send(alex, "!final")
+	h.send(alex, "!gt Sofía Vergara. Actress !gt Hachikō. The dog who waited")
+	if got := h.say(blair, "!!Y 1"); got != "Finished already: Juno Vale (#1)." {
+		t.Fatalf("a finished number keeps its reply, got %q", got)
+	}
+	if got := h.say(blair, "!!Y 9"); got != "There is no Nomination 9." {
+		t.Fatalf("a wrong number keeps its reply, got %q", got)
+	}
+	if got := h.say(blair, "!!Y 2"); strings.Contains(got, "I think you meant") || !strings.Contains(got, "@Blair has voted for Sofía Vergara (#2)") {
+		t.Fatalf("a number names its Nomination without a guess, got %q", got)
+	}
+}
+
+func TestCloseSpellingOfAClosedNameKeepsDidYouMean(t *testing.T) {
+	h := newHarness(t, severalOpen(6, 3))
+	h.send(alex, "!gt Juno Vale. Pitch")
+	h.send(blair, "!!Y")
+	h.send(casey, "!!Y")
+	h.send(alex, "!final")
+	h.send(alex, "!gt Sofía Vergara. Actress !gt Hachikō. The dog who waited")
+	contains(t, h.say(blair, "!!Y juno vael"), "Did you mean Juno Vale?")
+	contains(t, h.say(blair, "!!Y juno vale"), "No open Nomination for Juno Vale.")
+}
+
+func TestOneOpenNominationNeedsNoCloseSpelling(t *testing.T) {
+	h := newHarness(t, severalOpen(6, 3))
+	h.send(alex, "!gt Sofía Vergara. Actress")
+	if got := h.say(blair, "!!Y sofia"); got != "@Blair has voted for Sofía Vergara (#1) to be a generational talent!  \n2/3 votes in." {
+		t.Fatalf("with one open Nomination a vote counts without a guess, got %q", got)
+	}
+}

@@ -31,7 +31,7 @@ func (b *Bot) vote(ctx context.Context, from Member, msg Message, match []string
 			end = starts[i+1][0]
 		}
 		choice := voteWords[strings.ToLower(text[start[2]:start[3]])]
-		named := names(known).leading(text[start[1]:end])
+		named := names(known).voting(text[start[1]:end])
 		if named.refused == "" && len(named.refs) == 0 && unknown {
 			if refused, err := b.refuseUnnamed(ctx, msg, "!!Y"); refused || err != nil {
 				return err
@@ -65,6 +65,13 @@ func (w wording) voteReplies(outcomes []domain.VoteOutcome) []port.Reply {
 }
 
 func (w wording) voteText(outcome domain.VoteOutcome) string {
+	if outcome.ByCloseSpelling {
+		return lines("I think you meant "+w.name(outcome.Number)+".", w.countedText(outcome))
+	}
+	return w.countedText(outcome)
+}
+
+func (w wording) countedText(outcome domain.VoteOutcome) string {
 	nomination := w.nomination(outcome.Number)
 	voter, name := w.member(outcome.Member), w.name(outcome.Number)
 	cast := nomination.Votes[outcome.Member]

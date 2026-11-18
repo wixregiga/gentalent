@@ -162,7 +162,7 @@ func TestOneOpenNominationPerPerson(t *testing.T) {
 
 	_, err = group.Nominate(blair.ID, candidates(grace, grace), today)
 	refused = refusal(t, err, domain.OneOpenNominationPerPerson)
-	if refused.Ref != (domain.Ref{Person: grace.ID}) {
+	if !reflect.DeepEqual(refused.Ref, domain.Ref{Person: grace.ID}) {
 		t.Fatalf("a message naming Grace twice must name her, got %+v", refused.Ref)
 	}
 	wantUnchanged(t, group, before)
@@ -377,7 +377,7 @@ func TestRenominatedOnlyWhenRejected(t *testing.T) {
 
 	_, err = group.Renominate(blair.ID, candidates(katherine), today)
 	refused = refusal(t, err, domain.RenominatedOnlyWhenRejected)
-	if refused.Ref != (domain.Ref{Person: katherine.ID}) || len(refused.Numbers) != 0 {
+	if !reflect.DeepEqual(refused.Ref, domain.Ref{Person: katherine.ID}) || len(refused.Numbers) != 0 {
 		t.Fatalf("a Person never nominated must be named with no Nomination, got %+v", refused)
 	}
 	wantUnchanged(t, group, before)

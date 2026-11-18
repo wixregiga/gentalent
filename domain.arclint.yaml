@@ -142,6 +142,24 @@ contexts:
             statement: Each Member gives at most one Shame per Nomination.
             verified_by:
               - internal/nominations/domain/shame_test.go:TestOneShamePerMemberPerNomination
+          close-spelling-names-only-an-open-nomination:
+            on: CastVote
+            statement: >-
+              A vote that spells a Person's name closely, not exactly, counts
+              only on an open Nomination.
+            verified_by:
+              - internal/nominations/domain/vote_test.go:TestCloseSpellingNamesOnlyAnOpenNomination
+              - internal/nominations/delivery/chat/vote_test.go:TestTheSofiaVergaraVote
+              - internal/nominations/delivery/chat/vote_test.go:TestCloseSpellingsOfOpenNames
+              - internal/nominations/delivery/chat/vote_test.go:TestCloseSpellingOfAClosedNameKeepsDidYouMean
+          close-spelling-names-one-nomination:
+            on: CastVote
+            statement: >-
+              A close spelling that fits more than one open Nomination names
+              none of them.
+            verified_by:
+              - internal/nominations/domain/vote_test.go:TestCloseSpellingNamesOneNomination
+              - internal/nominations/delivery/chat/vote_test.go:TestCloseSpellingThatFitsTwoOpenNominationsNamesNone
     value_objects:
       CertificationStatus:
         definition: >-

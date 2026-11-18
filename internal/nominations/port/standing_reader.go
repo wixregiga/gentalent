@@ -33,6 +33,7 @@ type Name struct {
 	Alias   string
 	Person  domain.PersonID
 	Display string
+	Open    bool
 }
 
 type NameReader interface {

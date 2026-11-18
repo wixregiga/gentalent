@@ -127,9 +127,9 @@ func TestSeveralVotesInOneMessage(t *testing.T) {
 			t.Fatalf("Q17 a range votes on every Nomination in it, missing %d", number)
 		}
 	}
-	contains(t, h.say(alex, "!!C 2 !!Y gracie hoper"), "Did you mean Grace Hopper?")
+	contains(t, h.say(alex, "!!C 2 !!Y 3-1"), "Name Nominations by number")
 	if h.nomination(2).Votes[alex.ID] != "yes" {
-		t.Fatal("Q11 Q18 a near miss anywhere in the message counts nothing")
+		t.Fatal("Q11 Q18 a refused name anywhere in the message counts nothing")
 	}
 	contains(t, h.say(alex, "!!N 3-1"), "Name Nominations by number")
 }

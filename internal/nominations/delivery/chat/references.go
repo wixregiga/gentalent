@@ -36,8 +36,26 @@ type names []port.Name
 
 func (known names) leading(text string) reference {
 	text = strings.TrimSpace(text)
+	if named, ok := known.named(text); ok {
+		return named
+	}
+	return known.unnamed(text)
+}
+
+func (known names) voting(text string) reference {
+	text = strings.TrimSpace(text)
+	if named, ok := known.named(text); ok {
+		return named
+	}
+	if spelled := known.closeSpelled(strings.Fields(text)); len(spelled) > 0 {
+		return reference{refs: []domain.Ref{{Close: spelled}}}
+	}
+	return known.unnamed(text)
+}
+
+func (known names) named(text string) (reference, bool) {
 	if match := numberReference.FindStringSubmatch(text); match != nil {
-		return numbered(match, strings.TrimLeft(text[len(match[0]):], leadingNoise))
+		return numbered(match, strings.TrimLeft(text[len(match[0]):], leadingNoise)), true
 	}
 	words := strings.Fields(text)
 	for count := min(len(words), referenceWords); count > 0; count-- {
@@ -48,11 +66,15 @@ func (known names) leading(text string) reference {
 		for _, name := range known {
 			if name.Alias == string(key) {
 				rest := strings.TrimLeft(strings.Join(words[count:], " "), leadingNoise)
-				return reference{refs: []domain.Ref{{Person: name.Person}}, rest: rest}
+				return reference{refs: []domain.Ref{{Person: name.Person}}, rest: rest}, true
 			}
 		}
 	}
-	if suggestion := known.nearMiss(words); suggestion != "" {
+	return reference{}, false
+}
+
+func (known names) unnamed(text string) reference {
+	if suggestion := known.nearMiss(strings.Fields(text)); suggestion != "" {
 		return reference{refused: didYouMean(suggestion)}
 	}
 	return reference{rest: text}

@@ -48,7 +48,7 @@ func (w wording) refusal(r domain.Refusal) (string, bool) {
 	case domain.PhotosSearchedAtMostOncePerNomination:
 		nomination := w.nomination(first)
 		return fmt.Sprintf("Photos were already requested for %s (%d/%d votes in). Respond with !!Y or !!N.", w.name(first), len(nomination.Votes), members), true
-	case domain.VoteNamesItsNomination:
+	case domain.VoteNamesItsNomination, domain.CloseSpellingNamesOneNomination:
 		return lines(append([]string{fmt.Sprintf("Several Nominations are open. Name one, e.g. !!Y %d", first)}, w.listed(r.Numbers)...)...), true
 	case domain.VotesChangeUntilTheThirdVote:
 		nomination := w.nomination(first)
@@ -75,6 +75,11 @@ func (w wording) refusal(r domain.Refusal) (string, bool) {
 		return "Finished already: " + w.name(first) + ".", true
 	case domain.NoOpenNomination:
 		return "No open Nomination for " + w.person(r.Ref.Person) + ".", true
+	case domain.CloseSpellingNamesOnlyAnOpenNomination:
+		if len(r.Ref.Close) == 0 {
+			return "", false
+		}
+		return "No open Nomination for " + w.person(r.Ref.Close[0]) + ".", true
 	}
 	return "", false
 }
