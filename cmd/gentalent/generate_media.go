@@ -39,6 +39,6 @@ func generateMedia(ctx context.Context, call invocation, args []string) error {
 		return err
 	}
 	return printJSON(call.out, mediaJSON{
-		NomineeName: name[0], Summary: found.Summary, ProviderUsed: found.Provider, StripPath: found.Strip, PhotoPaths: found.Photos, SourcesPath: found.Sources,
+		NomineeName: found.CanonicalName, Summary: found.Summary, ProviderUsed: found.Provider, StripPath: found.Strip, PhotoPaths: found.Photos, SourcesPath: found.Sources,
 	})
 }

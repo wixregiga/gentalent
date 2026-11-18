@@ -56,3 +56,7 @@ Thumbs.db
 
 # ArcLint run cache
 .arclint/cache/
+
+# Go binaries built in place
+/cmd/gentalent/gentalent
+/bin/

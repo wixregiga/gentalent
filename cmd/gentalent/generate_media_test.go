@@ -12,7 +12,7 @@ import (
 const fakeClaude = `#!/bin/sh
 for n in 1 2 3; do convert -size 64x48 xc:navy "0$n.jpg"; done
 cat <<'MANIFEST'
-{"canonical_name":"Grace Hopper","summary":"A fictional pioneer.","photos":[
+{"canonical_name":"Grace Brewster Hopper","summary":"A fictional pioneer.","photos":[
 {"raw_filename":"01.jpg","source_page_url":"https://example.org/p/1","image_url":"https://example.org/i/1.jpg","caption":"Shot 1"},
 {"raw_filename":"02.jpg","source_page_url":"https://example.org/p/2","image_url":"https://example.org/i/2.jpg","caption":"Shot 2"},
 {"raw_filename":"03.jpg","source_page_url":"https://example.org/p/3","image_url":"https://example.org/i/3.jpg","caption":"Shot 3"}]}
@@ -44,7 +44,7 @@ func TestGenerateMediaRunsOneSearchWithTheChosenProvider(t *testing.T) {
 	}
 	photo := func(n int) string { return filepath.Join(folder, fmt.Sprintf("0%d_grace_hopper.jpg", n)) }
 	want, err := json.Marshal(map[string]any{
-		"nominee_name": "Grace Hopper", "summary": "A fictional pioneer.", "provider_used": "claude:sonnet",
+		"nominee_name": "Grace Brewster Hopper", "summary": "A fictional pioneer.", "provider_used": "claude:sonnet",
 		"strip_path": filepath.Join(folder, "strip.jpg"), "photo_paths": []string{photo(1), photo(2), photo(3)},
 		"sources_path": filepath.Join(folder, "SOURCES.txt"),
 	})

@@ -75,7 +75,7 @@ func (f *Finder) attempt(ctx context.Context, provider domain.Provider, subject 
 	if err := f.images.Stitch(ctx, photos, subject.StripPath()); err != nil {
 		return domain.Result{}, fmt.Errorf("creating the strip: %w", err)
 	}
-	result := domain.Result{Photos: photos, Strip: subject.StripPath(), Sources: subject.SourcesPath(), Provider: provider.Label(), Summary: manifest.Summary}
+	result := domain.Result{CanonicalName: manifest.CanonicalName, Photos: photos, Strip: subject.StripPath(), Sources: subject.SourcesPath(), Provider: provider.Label(), Summary: manifest.Summary}
 	if err := f.record.Record(subject, manifest, result); err != nil {
 		return domain.Result{}, fmt.Errorf("recording the search: %w", err)
 	}
