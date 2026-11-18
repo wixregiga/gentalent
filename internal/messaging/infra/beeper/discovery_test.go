@@ -56,7 +56,7 @@ func TestDiscoveryReturnsMetadataAndUsesRequestedScope(t *testing.T) {
 }
 
 func TestContractCheckFlagsEachSpecDrift(t *testing.T) {
-	wantSpec := `{"components":{"schemas":{"SendStatus":{"properties":{"status":{"enum":["PENDING","SUCCESS","FAIL_RETRIABLE","FAIL_PERMANENT"]}}},"Message":{"required":["id"]}}},"paths":{"/v1/chats/{chatID}/messages/{messageID}":{"get":{"description":"Retrieve by pendingMessageID"}}}}`
+	wantSpec := `{"components":{"schemas":{"SendStatus":{"properties":{"status":{"enum":["PENDING","SUCCESS","FAIL_RETRIABLE","FAIL_PERMANENT"]}}},"Message":{"required":["id"]}, "WSReadyMessage":{"properties":{"version":{"enum":[1]}}}}},"paths":{"/v1/chats/{chatID}/messages/{messageID}":{"get":{"description":"Retrieve by pendingMessageID"}}}}`
 	for _, tc := range []struct {
 		name, body string
 		want       int

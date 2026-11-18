@@ -23,18 +23,22 @@ func (c *Client) CheckConnection(ctx context.Context) error {
 
 type specDocument struct {
 	Components struct {
-		Schemas map[string]specSchema `json:"schemas"`
+		Schemas struct {
+			SendStatus struct {
+				Properties struct {
+					Status struct {
+						Enum []string `json:"enum"`
+					} `json:"status"`
+				} `json:"properties"`
+			} `json:"SendStatus"`
+			Message struct {
+				Required []string `json:"required"`
+			} `json:"Message"`
+		} `json:"schemas"`
 	} `json:"components"`
 	Paths map[string]map[string]struct {
 		Description string `json:"description"`
 	} `json:"paths"`
-}
-
-type specSchema struct {
-	Properties map[string]struct {
-		Enum []string `json:"enum"`
-	} `json:"properties"`
-	Required []string `json:"required"`
 }
 
 func (c *Client) ContractIssues(ctx context.Context) ([]string, error) {
@@ -43,7 +47,7 @@ func (c *Client) ContractIssues(ctx context.Context) ([]string, error) {
 		return nil, apiError(err)
 	}
 	var issues []string
-	statuses := spec.Components.Schemas["SendStatus"].Properties["status"].Enum
+	statuses := spec.Components.Schemas.SendStatus.Properties.Status.Enum
 	expected := []string{
 		string(shared.SendStatusStatusFailPermanent), string(shared.SendStatusStatusFailRetriable),
 		string(shared.SendStatusStatusPending), string(shared.SendStatusStatusSuccess),
@@ -51,7 +55,7 @@ func (c *Client) ContractIssues(ctx context.Context) ([]string, error) {
 	if slices.Sort(statuses); !slices.Equal(statuses, expected) {
 		issues = append(issues, fmt.Sprintf("SendStatus values changed: %v", statuses))
 	}
-	if slices.Contains(spec.Components.Schemas["Message"].Required, "sendStatus") {
+	if slices.Contains(spec.Components.Schemas.Message.Required, "sendStatus") {
 		issues = append(issues, "Message.sendStatus became required; the absent-status rule needs review.")
 	}
 	message := spec.Paths["/v1/chats/{chatID}/messages/{messageID}"]["get"]
