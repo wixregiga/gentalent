@@ -45,7 +45,7 @@ func (b *Bot) vote(ctx context.Context, from Member, msg Message, match []string
 			ballots = append(ballots, domain.Ballot{Nomination: ref, Vote: choice})
 		}
 	}
-	cmd := command.CastVote{MessageID: msg.ID, By: from.ID, Ballots: ballots, At: msg.SentAt}
+	cmd := command.CastVote{MessageID: msg.ID, By: from.ID, Ballots: ballots, At: b.config.Now()}
 	return b.castVote.Handle(ctx, cmd, present(b, msg.ID, nil, func(w wording, outcomes []domain.VoteOutcome) []port.Reply {
 		return w.voteReplies(outcomes)
 	}))

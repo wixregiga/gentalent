@@ -27,7 +27,7 @@ func (b *Bot) final(ctx context.Context, from Member, msg Message, match []strin
 		}
 		named = reference.refs
 	}
-	cmd := command.Finalize{MessageID: msg.ID, By: from.ID, Named: named, At: msg.SentAt}
+	cmd := command.Finalize{MessageID: msg.ID, By: from.ID, Named: named, At: b.config.Now()}
 	return b.finalize.Handle(ctx, cmd, present(b, msg.ID, nil, wording.verdicts))
 }
 

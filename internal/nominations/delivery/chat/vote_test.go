@@ -2,6 +2,7 @@ package chat_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -89,6 +90,39 @@ func TestADueNominationIsFinalizedBeforeTheNextMessage(t *testing.T) {
 	replies := h.send(casey, "!!N")
 	if len(replies) != 1 || replies[0].Key[:8] != "verdict/" {
 		t.Fatalf("B78 the verdict comes first and the late vote meets a finished Nomination, got %+v", replies)
+	}
+}
+
+func TestAVoteHandledAfterDowntimeLocksAtTheBotsClock(t *testing.T) {
+	h := newHarness(t, oneAtATime)
+	h.send(alex, "!gt Juno Vale. Pitch")
+	h.send(blair, "!!Y")
+	h.now = start.Add(10 * time.Minute)
+	replies := h.handle(chat.Message{Sender: string(casey.ID), Text: "!!Y", SentAt: start})
+	if len(replies) != 1 || !strings.Contains(replies[0].Text, "Result in 1 minute.") {
+		t.Fatalf("B65 the third vote locks, got %+v", replies)
+	}
+	ctx := context.Background()
+	if err := h.bot.FinalizeDue(ctx, h.now.Add(59*time.Second)); err != nil || len(h.fresh()) != 0 {
+		t.Fatalf("B65 B77 the minute starts when the bot applies the vote, not when it was sent: %v", err)
+	}
+	if err := h.bot.FinalizeDue(ctx, h.now.Add(time.Minute)); err != nil || len(h.fresh()) != 1 {
+		t.Fatalf("B77 the verdict comes a minute after the bot applied the vote: %v", err)
+	}
+	if got := h.nomination(1).FinalizedAt; !got.Equal(h.now.Add(time.Minute)) {
+		t.Fatalf("B176 a verdict is recorded at the bot's clock, got %v", got)
+	}
+}
+
+func TestFinalIsRecordedAtTheBotsClock(t *testing.T) {
+	h := newHarness(t, oneAtATime)
+	h.send(alex, "!gt Juno Vale. Pitch")
+	h.send(blair, "!!Y")
+	h.send(casey, "!!Y")
+	h.now = start.Add(30 * time.Second)
+	h.handle(chat.Message{Sender: string(alex.ID), Text: "!final", SentAt: start})
+	if got := h.nomination(1).FinalizedAt; !got.Equal(h.now) {
+		t.Fatalf("B176 !final records the verdict at the bot's clock, got %v", got)
 	}
 }
 
