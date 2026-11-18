@@ -7,7 +7,7 @@ import (
 	"gentalent/internal/nominations/domain"
 )
 
-func (m Message) replyReference() (domain.Ref, bool) {
+func (m Message) replyReference() (ref domain.Ref, unknownBotMessage bool) {
 	switch {
 	case m.ReplyTo == nil:
 		return domain.Ref{}, false
