@@ -81,6 +81,17 @@ which a viewer opened over `\\wsl.localhost` may not see.
 
 ## Working on it
 
+The Python bot in `gentalent/` is the one that runs. Its Go replacement is built beside it
+(`doc/architecture.md`): `go run ./cmd/gentalent <subcommand>` takes the same subcommands
+and flags, plus `busy`, which exits non-zero while a photo search is running. The Go bot
+keeps its own databases, `nominations_database` and `messaging_database` in `config.json`
+(default `.state/nominations.sqlite3` and `.state/messaging.sqlite3`), and imports the
+Python history from `database` the first time it opens them, reading it only. It also
+reads `group_open_nomination_limit` and `member_open_nomination_limit` (default 1),
+`single_message_nomination_limit` (3), `allow_renomination` (false) and
+`photo_search_workers` (3, the photo searches it runs at once); a limit below one refuses
+to start. `mise run test` and the deploy check run both suites.
+
 Changes happen in T3 Code worktree threads and ship from the main checkout with
 `mise run ship <branch>`. Commits and pushes are scanned for personal data and secrets
 (`lefthook install` once per clone). See [AGENTS.md](AGENTS.md).

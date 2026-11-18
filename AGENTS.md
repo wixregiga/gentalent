@@ -16,8 +16,8 @@ Editing files anywhere never changes the live bot; only a deploy does.
 
 ## Workflow
 
-1. Work and commit in the thread's worktree, branched from `main`. `mise run test` needs no
-   config or network.
+1. Work and commit in the thread's worktree, branched from `main`. `mise run test` runs the
+   Python and Go suites and needs no config or network.
 2. From the main checkout: `mise run ship <branch>`. It fast-forwards `main`, tests the
    commit in a scratch checkout, runs `doctor --contract` against the real Beeper API,
    refuses while the bot is mid-operation, backs up the ballot, pins `.live`, restarts only
@@ -54,4 +54,7 @@ Branches ship by fast-forward, so rebase onto `main` before shipping if `main` m
 - Tests prove behavior that would hurt if it broke. Break the rule a test guards and
   confirm it fails. No tests of formatting trivia or of mocks.
 - The interpreter: inside scratch checkouts the `mise` shim may refuse an untrusted
-  `mise.toml`; scripts resolve `python3` once at a trusted root and call it by path.
+  `mise.toml`; scripts resolve `python3` and `go` once at a trusted root and call them by path.
+- Go: `doc/architecture.md` is the map; `cmd/gentalent` is the only place that wires the
+  hexagons, starts goroutines or prints. Never run `go run ./cmd/gentalent run --live`
+  outside the main checkout, for the same reason as the Python bot.

@@ -21,11 +21,18 @@
     }
   ],
   "database": ".state/gentalent.sqlite3",
+  "nominations_database": ".state/nominations.sqlite3",
+  "messaging_database": ".state/messaging.sqlite3",
   "token_file": "~/.config/gentalent/beeper.token",
   "poll_seconds": 3,
   "media_dir": ".state/media",
   "photo_layout": "individual",
   "announce_reaction_votes": false,
+  "group_open_nomination_limit": 1,
+  "member_open_nomination_limit": 1,
+  "single_message_nomination_limit": 3,
+  "allow_renomination": false,
+  "photo_search_workers": 3,
   "ai_providers": [
     {"cli": "codex", "model": "gpt-6.1-sol"},
     {"cli": "claude", "model": "sonnet"},
