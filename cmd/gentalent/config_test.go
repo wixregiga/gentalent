@@ -102,6 +102,19 @@ func TestEveryInvalidSettingNamesItsKey(t *testing.T) {
 	}
 }
 
+func TestTheExampleConfigLoadsAndRefusesItsPlaceholders(t *testing.T) {
+	cfg, err := loadConfig(filepath.Join("..", "..", exampleConfig))
+	if err != nil {
+		t.Fatalf("init copies an example that loads: %v", err)
+	}
+	if err := cfg.validateGroup(); err == nil || !strings.Contains(err.Error(), "chat_id") {
+		t.Fatalf("B208 the example's placeholder IDs are refused: %v", err)
+	}
+	if cfg.settings().GroupOpenNominationLimit != 1 || cfg.PhotoSearchWorkers != 3 || len(cfg.AIProviders) != 3 {
+		t.Fatalf("the example shows the defaults: %+v", cfg)
+	}
+}
+
 func TestALimitBelowOneRefusesToStartAndNamesTheSetting(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.SingleMessageNominationLimit = 0

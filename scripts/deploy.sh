@@ -21,9 +21,10 @@ if [[ "${1:-}" == "--check" ]]; then
   shift
 fi
 
-# Resolve the interpreter here, at the trusted repo root, so nothing depends on how mise
-# treats the mise.toml inside a scratch checkout or .live.
+# Resolve the interpreter and the Go toolchain here, at the trusted repo root, so nothing
+# depends on how mise treats the mise.toml inside a scratch checkout or .live.
 python="$(python3 -c 'import sys; print(sys.executable)')"
+go="$(go env GOROOT)/bin/go"
 
 target="$(git rev-parse --verify "${1:-HEAD}^{commit}")"
 echo "Target: $(git log -1 --format='%h %s' "$target")"
@@ -44,7 +45,10 @@ cleanup() {
 }
 trap cleanup EXIT
 git worktree add --quiet --detach "$scratch/code" "$target"
-if ! (cd "$scratch/code" && "$python" -m unittest discover -s tests >"$scratch/tests.log" 2>&1); then
+go_suite() {
+  [[ ! -f go.mod ]] || { "$go" build -o "$scratch/bin/gentalent" ./cmd/gentalent && "$go" vet ./... && "$go" test ./...; }
+}
+if ! (cd "$scratch/code" && "$python" -m unittest discover -s tests && go_suite) >"$scratch/tests.log" 2>&1; then
   tail -n 30 "$scratch/tests.log"
   echo "Tests failed at $target; live bot untouched." >&2
   exit 1
