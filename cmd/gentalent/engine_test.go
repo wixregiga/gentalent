@@ -409,3 +409,23 @@ func TestAVoteThatRepliesToAnAnnouncementCountsOnThatNomination(t *testing.T) {
 		t.Fatalf("the reply to the first announcement must vote on that Nomination only, got %q", replies[1])
 	}
 }
+
+func TestAReplyToAnUnreconciledAnnouncementNeverVotesOnAnotherNomination(t *testing.T) {
+	b := newTestBot(t)
+	b.chat.say(blairID, "!gt Grace Hopper. Wrote the first compiler")
+	b.chat.say(alexID, "!!Y 1")
+	b.chat.say(caseyID, "!!Y 1")
+	b.chat.say(blairID, "!final 1")
+	b.chat.say(blairID, "!gt Ada Lovelace. Wrote the first program")
+	b.cycle()
+
+	b.chat.reply(caseyID, "!!N", "sent-1")
+	b.cycle()
+	if votes := b.votes(2); votes != 1 {
+		t.Fatalf("D36 a reply to Grace Hopper's announcement, sent but not yet reconciled, voted on Ada Lovelace: %d votes", votes)
+	}
+	sent := b.sentTexts()
+	if !strings.Contains(sent[len(sent)-1], "Which Nomination? Name one") {
+		t.Fatalf("Q7 the vote is refused with the open Nominations: %q", sent[len(sent)-1])
+	}
+}

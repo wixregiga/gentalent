@@ -171,6 +171,40 @@ func TestAVoteReplyingToAnAnnouncementVotesOnThatNomination(t *testing.T) {
 	}
 }
 
+func TestAReplyToABotMessageOfUnknownNominationMustNameOne(t *testing.T) {
+	h := newHarness(t, oneAtATime)
+	h.send(alex, "!gt Juno Vale. Pitch")
+	h.send(blair, "!!Y")
+	h.send(casey, "!!Y")
+	h.send(alex, "!final")
+	h.send(blair, "!gt Remy Quill. Pitch")
+	unknown := &chat.Quoted{ID: "unreconciled-announcement", FromBot: true}
+	want := "Which Nomination? Name one, e.g. !!Y 2  \nNomination 2: Remy Quill, 1/3 votes in"
+	replies := h.handle(chat.Message{Sender: string(casey.ID), Text: "!!N", ReplyTo: unknown})
+	if len(replies) != 1 || replies[0].Text != want {
+		t.Fatalf("Q7 a reply to a bot message of unknown Nomination is refused, got %+v", replies)
+	}
+	if _, voted := h.nomination(2).Votes[casey.ID]; voted {
+		t.Fatal("Q7 a no meant for another Nomination never lands on the only open one")
+	}
+	member := &chat.Quoted{ID: "member-message", Author: string(blair.ID)}
+	replies = h.handle(chat.Message{Sender: string(alex.ID), Text: "!!Y", ReplyTo: member})
+	if len(replies) != 1 || !strings.Contains(replies[0].Text, "@Alex has voted for Remy Quill (#2)") {
+		t.Fatalf("Q7 a reply to a Member's message keeps the one-open rule, got %+v", replies)
+	}
+	contains(t, h.say(casey, "!!N 2"), "@Casey has voted against Remy Quill (#2)")
+
+	finalWant := "Which Nomination? Name one, e.g. !final 2  \nNomination 2: Remy Quill, 3/3 votes in"
+	replies = h.handle(chat.Message{Sender: string(blair.ID), Text: "!final", ReplyTo: unknown})
+	if len(replies) != 1 || replies[0].Text != finalWant || !h.nomination(2).Open() {
+		t.Fatalf("Q7 a bare !final replying to a bot message of unknown Nomination is refused, got %+v", replies)
+	}
+	replies = h.handle(chat.Message{Sender: string(blair.ID), Text: "!final", ReplyTo: &chat.Quoted{ID: "announcement", FromBot: true, Announces: 2}})
+	if len(replies) != 1 || !strings.Contains(replies[0].Text, "Rejected: Remy Quill (#2)") {
+		t.Fatalf("Q7 a bare !final replying to an announcement finalizes that Nomination, got %+v", replies)
+	}
+}
+
 func TestReactionsVote(t *testing.T) {
 	h := newHarness(t, oneAtATime)
 	h.send(alex, "!gt Juno Vale. Pitch")

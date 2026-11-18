@@ -75,7 +75,7 @@ func (w wording) listed(numbers []domain.NominationNumber) []string {
 	listed := make([]string, len(numbers))
 	for i, number := range numbers {
 		nomination := w.nomination(number)
-		listed[i] = fmt.Sprintf("Nomination %d: %s, %d/%d votes in", number, literal(nomination.Person.Name), len(nomination.Votes), len(w.bot.config.Members))
+		listed[i] = listedNomination(number, nomination.Person.Name, len(nomination.Votes), len(w.bot.config.Members))
 	}
 	return listed
 }

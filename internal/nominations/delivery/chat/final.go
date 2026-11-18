@@ -13,7 +13,17 @@ import (
 
 func (b *Bot) final(ctx context.Context, from Member, msg Message, match []string) error {
 	var named []domain.Ref
-	if body := strings.TrimSpace(match[1]); body != "" {
+	if body := strings.TrimSpace(match[1]); body == "" {
+		replied, unknown := msg.replyReference()
+		if unknown {
+			if refused, err := b.refuseUnnamed(ctx, msg, "!final"); refused || err != nil {
+				return err
+			}
+		}
+		if !replied.Unnamed() {
+			named = []domain.Ref{replied}
+		}
+	} else {
 		known, err := b.names.Handle(ctx)
 		if err != nil {
 			return err
