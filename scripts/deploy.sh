@@ -54,29 +54,43 @@ if ! (cd "$scratch/code" && "$python" -m unittest discover -s tests && go_suite)
   exit 1
 fi
 echo "Tests passed."
-(cd "$scratch/code" && "$python" -m gentalent --config "$root/config.json" doctor --contract)
+gentalent="$scratch/bin/gentalent"
+if [[ ! -x "$gentalent" ]]; then
+  echo "${target:0:7} has no Go bot to deploy; the live bot runs the Go binary." >&2
+  exit 1
+fi
 
-live_db="$("$python" -c 'import json, pathlib, sys
+databases="$("$python" -c 'import json, sys
 from pathlib import Path
 config = Path(sys.argv[1]).resolve()
-p = Path(json.loads(config.read_text())["database"]).expanduser()
-print(p if p.is_absolute() else config.parent / p)' "$root/config.json")"
+data = json.loads(config.read_text())
+for key, default in (("database", ".state/gentalent.sqlite3"),
+                     ("nominations_database", ".state/nominations.sqlite3"),
+                     ("messaging_database", ".state/messaging.sqlite3")):
+    p = Path(data.get(key) or default).expanduser()
+    print(p if p.is_absolute() else config.parent / p)' "$root/config.json")"
+{ read -r python_db; read -r nominations_db; read -r messaging_db; } <<<"$databases"
 
-bot_idle() {
-  # The worker holds a write transaction while handling a message, including the minutes a
-  # !!gt photo search takes. Restarting then would roll it back and repeat the AI call.
-  "$python" -c 'import sqlite3, sys
-from pathlib import Path
-db = sqlite3.connect(Path(sys.argv[1]).as_uri() + "?mode=rw", uri=True, timeout=0.5)
-try:
-    db.execute("BEGIN IMMEDIATE")
-    db.rollback()
-except sqlite3.OperationalError:
-    sys.exit(1)' "$live_db"
+starts_python() {
+  git show "$1:scripts/run-gentalent-live.sh" 2>/dev/null | grep -q -- '-m gentalent'
 }
-if ! bot_idle; then
-  echo "The live bot is mid-operation (probably generating photos). Try again in a few minutes." >&2
+# The Python bot's cursor does not move while the Go bot runs. Once the Go bot has opened its
+# messaging database, a Python bot would answer again every message the Go bot answered.
+starts_python_after_go() {
+  [[ -e "$messaging_db" ]] && starts_python "$1"
+}
+if starts_python_after_go "$target"; then
+  echo "${target:0:7} starts the Python bot, but the Go bot has run ($messaging_db exists)." >&2
+  echo "The Python bot would answer again every message the Go bot answered. Deploy a commit that starts the Go bot." >&2
   exit 1
+fi
+
+if [[ -e "$messaging_db" ]]; then
+  "$gentalent" --config "$root/config.json" doctor --contract
+else
+  # The Go bot has not started yet. At its first start it imports exactly these Python
+  # replies, so the Python check reads the same evidence.
+  (cd "$scratch/code" && "$python" -m gentalent --config "$root/config.json" doctor --contract)
 fi
 
 if [[ -e .live && "$(git -C .live rev-parse --show-toplevel 2>/dev/null)" != "$root/.live" ]]; then
@@ -91,6 +105,29 @@ if [[ -e .live && -n "$(git -C .live status --porcelain --untracked-files=all)" 
   exit 1
 fi
 previous="$(git -C .live rev-parse HEAD 2>/dev/null || true)"
+
+python_idle() {
+  # The Python bot holds a write transaction while handling a message, including the minutes
+  # a !!gt photo search takes. Restarting then would roll it back and repeat the AI call.
+  "$python" -c 'import sqlite3, sys
+from pathlib import Path
+db = sqlite3.connect(Path(sys.argv[1]).as_uri() + "?mode=rw", uri=True, timeout=0.5)
+try:
+    db.execute("BEGIN IMMEDIATE")
+    db.rollback()
+except sqlite3.OperationalError:
+    sys.exit(1)' "$python_db"
+}
+if [[ -n "$previous" ]] && starts_python "$previous"; then
+  if ! python_idle; then
+    echo "The live Python bot is mid-operation (probably generating photos). Try again in a few minutes." >&2
+    exit 1
+  fi
+elif ! "$gentalent" --config "$root/config.json" busy --live; then
+  # A restart abandons a running Go photo search for good (it is never rerun).
+  echo "The live bot is mid-operation (a photo search is running). Try again in a few minutes." >&2
+  exit 1
+fi
 
 if [[ -n "$check_only" ]]; then
   echo "Check only: would pin .live ${previous:+from ${previous:0:7} }to ${target:0:7} and restart."
@@ -111,11 +148,19 @@ while i < len(text):
 ' || true
 }
 
+# pin COMMIT [BINARY]: check out COMMIT in .live and install BINARY, the bot built and tested
+# from that commit, as .live/bin/gentalent. Never build in .live: it may hold ignored files.
 pin() {
   if [[ -d .live ]]; then
     git -C .live checkout --quiet --detach "$1"
   else
     git worktree add --quiet --detach .live "$1"
+  fi
+  if [[ -n "${2:-}" ]]; then
+    mkdir -p .live/bin
+    cp "$2" .live/bin/gentalent.new
+    chmod 755 .live/bin/gentalent.new
+    mv .live/bin/gentalent.new .live/bin/gentalent
   fi
 }
 
@@ -141,16 +186,25 @@ steady_pid() {
   return 1
 }
 
-backup="$(dirname "$live_db")/backups/$(basename "$live_db" .sqlite3)-$(date +%Y%m%d-%H%M%S)-before-${target:0:7}.sqlite3"
-mkdir -p "$(dirname "$backup")"
-"$python" -c 'import sqlite3, sys
+stamp="$(date +%Y%m%d-%H%M%S)"
+for db in "$python_db" "$nominations_db" "$messaging_db"; do
+  [[ -e "$db" ]] || continue
+  backup="$(dirname "$db")/backups/$(basename "$db" .sqlite3)-$stamp-before-${target:0:7}.sqlite3"
+  mkdir -p "$(dirname "$backup")"
+  "$python" -c 'import sqlite3, sys
 src = sqlite3.connect(sys.argv[1]); dst = sqlite3.connect(sys.argv[2])
-src.backup(dst); dst.close(); src.close()' "$live_db" "$backup"
-chmod 600 "$backup"
-echo "Backed up the ballot to $backup"
+src.backup(dst); dst.close(); src.close()' "$db" "$backup"
+  chmod 600 "$backup"
+  echo "Backed up $(basename "$db") to $backup"
+done
 
+previous_binary=""
+if [[ -x .live/bin/gentalent ]]; then
+  previous_binary="$scratch/previous-gentalent"
+  cp .live/bin/gentalent "$previous_binary"
+fi
 old_pid="$(daemon_pid)"
-pin "$target"
+pin "$target" "$gentalent"
 restart
 if pid="$(steady_pid "$old_pid")"; then
   echo "Live bot running $(git -C .live log -1 --format='%h %s') (pid $pid)."
@@ -163,9 +217,21 @@ if [[ -z "$previous" ]]; then
   echo "No earlier pinned commit to roll back to; .live stays on ${target:0:7}." >&2
   exit 1
 fi
+if starts_python_after_go "$previous"; then
+  cat >&2 <<EOF
+Not rolling back to ${previous:0:7}: it starts the Python bot, and the Go bot has run. The Python
+cursor in $python_db did not move while the Go bot ran, so the Python bot would answer again
+every message the Go bot answered. .live stays on ${target:0:7}.
+Instead:
+  1. Read why the Go bot stopped: mise daemons logs gentalent -n 50
+  2. Fix forward: mise run ship <branch with the fix>, or mise run deploy <an earlier commit
+     on main that starts the Go bot>.
+EOF
+  exit 1
+fi
 echo "Rolling .live back to ${previous:0:7}." >&2
 failed_pid="$(daemon_pid)"
-pin "$previous"
+pin "$previous" "$previous_binary"
 restart
 if pid="$(steady_pid "$failed_pid")"; then
   echo "Rolled back; live bot running ${previous:0:7} (pid $pid)." >&2

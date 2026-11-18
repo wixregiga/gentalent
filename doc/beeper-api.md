@@ -12,7 +12,7 @@ Each item below is labeled:
 
 Two checks guard these assumptions:
 
-- `python3 -m gentalent doctor --contract` reads the live spec and the three newest
+- `go run ./cmd/gentalent doctor --contract` reads the live spec and the three newest
   delivered replies from Beeper, and fails if items 1 to 3 no longer hold. It is
   read-only, and `mise run deploy` runs it before every restart.
 - `tests/test_beeper_contract.py` replays items 3 to 5 and 8 through the send code using the
@@ -97,4 +97,4 @@ Two checks guard these assumptions:
 | First three replies stuck `pending`; bot later crashed on every poll | Code required `sendStatus == SUCCESS`, which never came in this group (item 3) | Item 3 rule; unit and contract tests |
 | Crash loop | Pending ID 404 (item 5) raised out of every poll | 404 marks `uncertain`, polling continues |
 | A 404 "recovery" marked three delivered replies `uncertain` | It guessed by matching text in only the newest 20 messages, by which time the replies were hundreds of IDs back (#264 against #738) | Guessing removed; `resolve-send` checks one named message |
-| A database viewer showed no recent cases | Most likely SQLite WAL (viewer not confirmed): recent commits live in `gentalent.sqlite3-wal` until a checkpoint, and WAL does not work over network filesystems ([sqlite.org/wal.html](https://www.sqlite.org/wal.html)) | Use `gentalent status`, or a viewer opened inside WSL |
+| A database viewer showed no recent cases | Most likely SQLite WAL (viewer not confirmed): recent commits live in `nominations.sqlite3-wal` and `messaging.sqlite3-wal` until a checkpoint, and WAL does not work over network filesystems ([sqlite.org/wal.html](https://www.sqlite.org/wal.html)) | Use `gentalent status`, or a viewer opened inside WSL |
