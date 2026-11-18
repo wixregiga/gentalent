@@ -36,6 +36,7 @@ with sqlite3.connect(sys.argv[1]) as db:
         INSERT INTO outbox VALUES ('failed','@gentalent-bot says: failed','failed','rejected-lookup','rejected','reply','',NULL);
         INSERT INTO outbox VALUES ('previewed','@gentalent-bot says: preview','preview',NULL,NULL,'reply','',NULL);
         INSERT INTO outbox VALUES ('queued','@gentalent-bot says: next','queued',NULL,NULL,'reply','',NULL);
+        INSERT INTO outbox VALUES ('superseded','@gentalent-bot says: replaced','superseded',NULL,NULL,'reply','',NULL);
         INSERT INTO shames(case_id,shamer_id,target_id,message_id,created_at) VALUES (3,'blair','alex','message','2026-01-02T03:04:05Z');
         INSERT INTO reaction_votes VALUES (3,'casey','no');
         INSERT INTO feedback(message_id,sender_id,kind,text,said_at) VALUES ('idea','alex','feedback','idea','2026-01-02T03:04:05Z');
@@ -66,10 +67,10 @@ with sqlite3.connect(sys.argv[1]) as db:
 	}
 	replies, err := s.replies(ctx, "SELECT "+replyColumns+" FROM outbox ORDER BY rowid")
 	must(t, err)
-	if len(replies) != 7 || replies[0].Key != "announcement" || replies[0].PendingID != "old-pending" ||
+	if len(replies) != 8 || replies[0].Key != "announcement" || replies[0].PendingID != "old-pending" ||
 		replies[1].Key != "other-reply" || replies[1].Tag != "" || replies[1].State != domain.Uncertain ||
 		replies[1].PendingID != "later-pending" || replies[1].Kind != "shame" || replies[1].Attachment != "media/demo.gif" ||
-		replies[6].Key != "queued" {
+		replies[6].Key != "queued" || replies[7].Key != "superseded" || replies[7].State != domain.Failed {
 		t.Fatalf("replies lost, reordered, or mistagged: %+v", replies)
 	}
 	must(t, s.StartWorker(ctx, "binding"))

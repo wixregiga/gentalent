@@ -53,7 +53,7 @@ func importHistory(ctx context.Context, target *sql.Tx, path string) error {
 		}
 	}
 	rows, err := source.QueryContext(ctx, `
-		SELECT id,text,status,COALESCE(pending_id,''),COALESCE(final_id,''),kind,attachment_path,
+		SELECT id,text,CASE status WHEN 'superseded' THEN 'failed' ELSE status END,COALESCE(pending_id,''),COALESCE(final_id,''),kind,attachment_path,
 		CASE WHEN case_id IS NOT NULL AND rowid=(SELECT MIN(first.rowid) FROM outbox first
 		WHERE first.case_id=reply.case_id) THEN 'announces/' || case_id ELSE '' END
 		FROM outbox reply ORDER BY rowid
