@@ -15,9 +15,9 @@ Two checks guard these assumptions:
 - `go run ./cmd/gentalent doctor --contract` reads the live spec and the three newest
   delivered replies from Beeper, and fails if items 1 to 3 no longer hold. It is
   read-only, and `mise run deploy` runs it before every restart.
-- `tests/test_beeper_contract.py` replays items 3 to 5 and 8 through the send code using the
-  captured response shapes. It proves the code handles them; it cannot notice Beeper
-  changing.
+- `TestCapturedDeliveryEvidenceThroughSDK` in `internal/messaging/infra/beeper/messages_test.go`
+  replays items 3 to 5 and 8 through the Beeper adapter using the captured response shapes.
+  It proves the code handles them; it cannot notice Beeper changing.
 
 ## Sending a reply
 

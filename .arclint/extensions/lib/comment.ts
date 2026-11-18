@@ -1,5 +1,4 @@
 import { goComments } from "./go_comments";
-import { pythonComments } from "./python_comments";
 import { typescriptComments } from "./typescript_comments";
 
 export type CommentKind = "prose" | "suppression" | "directive" | "license" | "generated";
@@ -15,8 +14,6 @@ const licenseIdentifier = /SPDX-License-Identifier:/;
 
 const scanners: Record<string, (source: string) => Comment[]> = {
   ".go": goComments,
-  ".py": pythonComments,
-  ".pyi": pythonComments,
   ".ts": source => typescriptComments(source, false),
   ".mts": source => typescriptComments(source, false),
   ".cts": source => typescriptComments(source, false),

@@ -14,7 +14,7 @@ const suppressionHint = "Fix what it silences. A suppression proven necessary go
 
 export default defineRule({
   type: "source/no-comments",
-  description: "report comments and lint or type-checker suppressions in Go, Python, and TypeScript source, except directives, license identifiers, generated files, and kept comments with recorded proof",
+  description: "report comments and lint or type-checker suppressions in Go and TypeScript source, except directives, license identifiers, generated files, and kept comments with recorded proof",
   capability: "heuristic",
   params: s.object({
     keep: s.array(s.object({

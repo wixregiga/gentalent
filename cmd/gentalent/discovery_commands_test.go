@@ -16,7 +16,7 @@ func participantJSONOf(id string) string {
 var shownGroup = `{"id":"group/one","accountID":"demo-account","network":"","title":"","type":"group","participants":{"items":[` +
 	participantJSONOf("blair") + `,` + participantJSONOf("casey") + `],"hasMore":false,"total":2}}`
 
-func TestDiscoveryPrintsTheMetadataPythonPrinted(t *testing.T) {
+func TestDiscoveryPrintsTheChatMetadata(t *testing.T) {
 	config := capturedGroupConfig(t, observedSpec)
 	for _, tc := range []struct {
 		name string

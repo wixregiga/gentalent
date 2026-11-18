@@ -9,7 +9,7 @@ Planned 2026-11-16. Feedback and shame are built; info waits for the ArcLint ses
 - Stores the text with sender, message ID and time (`feedback` table), then replies
   "Thanks @Name, your feedback (or suggestion) is logged and will be considered for a future release."
 - Empty text gets a usage reply and stores nothing. Read entries with
-  `python3 -m gentalent feedback --live` (read-only, safe while the bot runs).
+  `go run ./cmd/gentalent feedback --live` (read-only, safe while the bot runs).
 
 ### `!gtshame`
 
@@ -42,7 +42,8 @@ How it works:
 - **Replies to the bot's own messages are ignored, silently.** Bot photos and GIFs, which
   have no text, are recognized by the file names the bot sent. The bot posts from the
   owner's account, so the replied-to author would be wrong. Supporting them needs each
-  outbox row to record the member it is about; add that where `shame.run` resolves the target.
+  outbox row to record the member it is about; add that where `shameOver`
+  in `internal/nominations/delivery/chat/shame.go` resolves the target.
 - Self-shame is refused before a GIF is chosen. Each shame records: nominee (case), shamer,
   target, reason, the target's vote at that moment, the shamed message ID, text and time,
   the GIF, and when. Triggers make shames permanent, like denials.
@@ -69,18 +70,15 @@ Open questions:
 2. A pitch-less `!gt` would then call AI. Acceptable?
 3. Include ethnicity only when the person has stated it publicly, with a source?
 
-## For the ArcLint session
+## Settled in the ArcLint session
 
-- **AI work holds the database.** `!!gt` photo searches run inside the message
-  transaction, so the bot answers nothing else for minutes, and a restart mid-search
-  repeats it (`deploy.sh` refuses to restart while one runs). `!!gtinfo` would add more of
-  this. Move AI calls to a background job queue first.
-- **Schema changes.** New tables use `CREATE TABLE IF NOT EXISTS` and need no migration.
-  Changing an existing table (for example recording the member each outbox row is about)
-  needs a decision on how live-database migrations are run without in-code
-  backwards-compatibility paths.
-- **Database access is spread out.** `workflow.py` still runs SQL directly. New features
-  follow the module pattern instead: `shame.py` and `feedback.py` own their command,
-  checks and replies; `nominees.py` resolves what people type; `replies.py` formats text.
+- **AI work no longer holds the database.** `!!gt` photo searches run beside the ordered
+  lane (`doc/architecture.md`, step 6), at most once per Nomination; the deploy refuses to
+  restart while one runs, because a restart abandons it. `!!gtinfo` can run the same way.
+- **Schema changes** are numbered migrations in each hexagon's `infra/sqlite`, tracked by
+  `PRAGMA user_version` (`doc/architecture.md`). Recording the member each outbox row is
+  about is a new migration.
+- **Database access** lives in each hexagon's `infra/sqlite`; chat commands reach it only
+  through ports.
 - **Beeper behavior** is recorded in `doc/beeper-api.md` (documented vs observed), and
-  `python3 -m gentalent doctor --contract` checks the observed parts against the live API.
+  `go run ./cmd/gentalent doctor --contract` checks the observed parts against the live API.

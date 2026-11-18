@@ -2,7 +2,7 @@ package chat
 
 import "testing"
 
-func TestNameGrammarMatchesThePythonBot(t *testing.T) {
+func TestNameGrammarSplitsTheNameFromThePitch(t *testing.T) {
 	cases := []struct{ body, name, pitch string }{
 		{"Juno Vale. She rules", "Juno Vale", "She rules"},
 		{"juno vale", "Juno Vale", ""},
@@ -40,7 +40,7 @@ func TestNameGrammarMatchesThePythonBot(t *testing.T) {
 	for _, c := range cases {
 		raw, pitch := splitNameAndPitch(c.body)
 		if name := formatName(raw); name != c.name || pitch != c.pitch {
-			t.Fatalf("B23 to B30 %q: Python gives %q and %q, got %q and %q", c.body, c.name, c.pitch, name, pitch)
+			t.Fatalf("B23 to B30 %q: want %q and %q, got %q and %q", c.body, c.name, c.pitch, name, pitch)
 		}
 	}
 }

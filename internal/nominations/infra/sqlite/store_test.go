@@ -38,10 +38,10 @@ func openDatabase(t *testing.T, path string) *sql.DB {
 	return db
 }
 
-func migrated(t *testing.T, pythonDatabase string) *sql.DB {
+func migrated(t *testing.T) *sql.DB {
 	t.Helper()
 	db := openDatabase(t, filepath.Join(t.TempDir(), "nominations.sqlite3"))
-	for i, migration := range sqlite.Migrations(pythonDatabase) {
+	for i, migration := range sqlite.Migrations() {
 		tx, err := db.Begin()
 		if err != nil {
 			t.Fatal(err)
@@ -88,7 +88,7 @@ func ada() []domain.Candidate {
 }
 
 func TestStoreKeepsEveryChangeOfTheGroup(t *testing.T) {
-	store := newStore(t, migrated(t, ""))
+	store := newStore(t, migrated(t))
 	apply(t, store, "message-1", func(g *domain.Group) error { _, err := g.Nominate(alex, ada(), today); return err })
 	apply(t, store, "message-2", func(g *domain.Group) error {
 		_, err := g.CastVote(blair, []domain.Ballot{{Vote: domain.Yes}}, today)
@@ -129,7 +129,7 @@ func TestStoreKeepsEveryChangeOfTheGroup(t *testing.T) {
 }
 
 func TestAHandledMessageIsNeverAppliedTwice(t *testing.T) {
-	db := migrated(t, "")
+	db := migrated(t)
 	store := newStore(t, db)
 	nominate := func(g *domain.Group) error { _, err := g.Nominate(alex, ada(), today); return err }
 	apply(t, store, "message-1", nominate, port.Reply{Key: "message-1/1", Text: "announced"})
@@ -145,7 +145,7 @@ func TestAHandledMessageIsNeverAppliedTwice(t *testing.T) {
 }
 
 func TestAFailedChangeCommitsNothing(t *testing.T) {
-	db := migrated(t, "")
+	db := migrated(t)
 	store := newStore(t, db)
 	err := store.Apply(context.Background(), "message-1", func(g *domain.Group) ([]port.Reply, error) {
 		if _, err := g.Nominate(alex, ada(), today); err != nil {
@@ -167,7 +167,7 @@ func TestAFailedChangeCommitsNothing(t *testing.T) {
 }
 
 func TestOutcomesAndShamesArePermanent(t *testing.T) {
-	db := migrated(t, "")
+	db := migrated(t)
 	store := newStore(t, db)
 	apply(t, store, "message-1", func(g *domain.Group) error { _, err := g.Nominate(alex, ada(), today); return err })
 	apply(t, store, "message-2", func(g *domain.Group) error {
@@ -199,7 +199,7 @@ func TestOutcomesAndShamesArePermanent(t *testing.T) {
 }
 
 func TestTheOutboxRelaysEachReplyOnce(t *testing.T) {
-	db := migrated(t, "")
+	db := migrated(t)
 	store := newStore(t, db)
 	reader := sqlite.NewReader(db)
 	ctx := context.Background()
@@ -223,7 +223,7 @@ func TestTheOutboxRelaysEachReplyOnce(t *testing.T) {
 }
 
 func TestFeedbackIsLoggedOnce(t *testing.T) {
-	db := migrated(t, "")
+	db := migrated(t)
 	store := newStore(t, db)
 	ctx := context.Background()
 	entry := port.Feedback{MessageID: "message-1", Sender: alex, Kind: "suggestion", Text: "show who voted last", SaidAt: today}
@@ -239,7 +239,7 @@ func TestFeedbackIsLoggedOnce(t *testing.T) {
 }
 
 func TestTheDatabaseBelongsToOneGroup(t *testing.T) {
-	db := migrated(t, "")
+	db := migrated(t)
 	newStore(t, db)
 	if _, err := sqlite.NewStore(context.Background(), db, "another-group", members, settings); err == nil {
 		t.Fatal("B173 a database of another Group is refused")
@@ -249,7 +249,7 @@ func TestTheDatabaseBelongsToOneGroup(t *testing.T) {
 func TestALimitBelowOneRefusesToOpenTheStore(t *testing.T) {
 	low := settings
 	low.MemberOpenNominationLimit = 0
-	_, err := sqlite.NewStore(context.Background(), migrated(t, ""), "group-test", members, low)
+	_, err := sqlite.NewStore(context.Background(), migrated(t), "group-test", members, low)
 	var below domain.LimitBelowOne
 	if !errors.As(err, &below) || below.Limit != domain.MemberOpenNominationLimit {
 		t.Fatalf("R9 the store names the limit below one, got %v", err)
@@ -257,7 +257,7 @@ func TestALimitBelowOneRefusesToOpenTheStore(t *testing.T) {
 }
 
 func TestReadStanding(t *testing.T) {
-	db := migrated(t, "")
+	db := migrated(t)
 	store := newStore(t, db)
 	grace := []domain.Candidate{{Person: "gracehopper", Name: "Grace Hopper"}}
 	reject := func(g *domain.Group, number domain.NominationNumber) error {

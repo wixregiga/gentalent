@@ -49,7 +49,7 @@ func TestSearchFilesRecordTheFinishedSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(written), "Café <stage> & lights") {
-		t.Errorf("B234 manifest.json keeps text unescaped, as the Python bot writes it:\n%s", written)
+		t.Errorf("B234 manifest.json keeps text unescaped:\n%s", written)
 	}
 	var got any
 	if err := json.Unmarshal(written, &got); err != nil {

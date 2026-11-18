@@ -7,7 +7,7 @@ import (
 	"gentalent/internal/nominations/domain"
 )
 
-func TestSimilarityMatchesPythonDifflib(t *testing.T) {
+func TestSimilarityIsTheRatcliffObershelpRatio(t *testing.T) {
 	cases := []struct {
 		a, b string
 		want float64
@@ -22,12 +22,12 @@ func TestSimilarityMatchesPythonDifflib(t *testing.T) {
 	}
 	for _, c := range cases {
 		if got := similarity(c.a, c.b); math.Abs(got-c.want) > 1e-12 {
-			t.Fatalf("B111 SequenceMatcher(%q, %q).ratio() is %v, got %v", c.a, c.b, c.want, got)
+			t.Fatalf("B111 the similarity of %q and %q is %v, got %v", c.a, c.b, c.want, got)
 		}
 	}
 }
 
-func TestPersonKeyMatchesPythonNormalized(t *testing.T) {
+func TestPersonKeyFoldsANameToItsLettersAndDigits(t *testing.T) {
 	cases := map[string]domain.PersonID{
 		"ﬁona Ｖale²":     "fionavale2",
 		"José Vale":     "josévale",

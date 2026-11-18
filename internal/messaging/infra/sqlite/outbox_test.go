@@ -11,7 +11,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func openStore(t *testing.T, source string) *Store {
+func openStore(t *testing.T) *Store {
 	t.Helper()
 	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "messaging.sqlite3"))
 	if err != nil {
@@ -23,7 +23,7 @@ func openStore(t *testing.T, source string) *Store {
 		t.Fatal(err)
 	}
 	defer tx.Rollback()
-	if err := Migrations(source)[0](t.Context(), tx); err != nil {
+	if err := Migrations()[0](t.Context(), tx); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -33,7 +33,7 @@ func openStore(t *testing.T, source string) *Store {
 }
 
 func TestRestartNeverRequeuesClaimedReply(t *testing.T) {
-	s := openStore(t, "")
+	s := openStore(t)
 	ctx := t.Context()
 	must(t, s.StartWorker(ctx, "binding"))
 	must(t, s.Enqueue(ctx, []domain.Outgoing{{Key: "a", Text: "first"}, {Key: "b", Text: "second"}}))
@@ -71,7 +71,7 @@ func must(t *testing.T, err error) {
 }
 
 func TestStatusAndTagReadOnlyDeliveredEvidence(t *testing.T) {
-	s := openStore(t, "")
+	s := openStore(t)
 	ctx := t.Context()
 	must(t, s.Enqueue(ctx, []domain.Outgoing{
 		{Key: "sent", Text: "sent", Tag: "sent-tag"},
@@ -126,7 +126,7 @@ func TestStatusAndTagReadOnlyDeliveredEvidence(t *testing.T) {
 }
 
 func TestAFinalIDHeldByAnotherReplyIsNeverClaimedTwice(t *testing.T) {
-	s := openStore(t, "")
+	s := openStore(t)
 	ctx := t.Context()
 	must(t, s.Enqueue(ctx, []domain.Outgoing{{Key: "first", Text: "first"}, {Key: "second", Text: "second"}}))
 	for _, key := range []string{"first", "second"} {

@@ -10,7 +10,7 @@ import (
 
 func TestInboxAndCursorCommitTogether(t *testing.T) {
 	ctx := t.Context()
-	s := openStore(t, "")
+	s := openStore(t)
 	stamp := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	armed, err := s.Arm(ctx, port.Baseline{Cursor: "before", ArmedAt: stamp})
 	must(t, err)

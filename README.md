@@ -61,18 +61,15 @@ The bot runs the commit pinned in `.live/`, a git worktree, as `.live/bin/gental
 
 All of these run from the main checkout only, and a real deploy takes only commits on `main`.
 
-A deploy runs the Python and Go tests in a scratch checkout and `doctor --contract` against
-the real Beeper API. It refuses while a `!!gt` photo search is running, because a restart
-would interrupt it: while the deployed bot is still the Python one, by the write lock the
-Python bot holds during a search; once it is the Go bot, by `gentalent busy`. It refuses
-while `.live` has local changes (anything `git -C .live status` shows), because a checkout
-keeps them and the bot would run code no test saw. It backs up the databases, pins `.live`,
-installs the binary the tests ran against as `.live/bin/gentalent` and restarts. If the bot
-doesn't stay up, it puts `.live` back on the previous commit, except onto a commit that
-starts the Python bot once the Go bot has run: the Python bot's cursor did not move
-meanwhile, so it would answer again what the Go bot answered. The deploy then stops and says
-how to fix forward. `scripts/deploy-test.sh` runs the real deploy script in a throwaway
-repository to prove each refusal.
+A deploy runs the Go tests in a scratch checkout and `doctor --contract` against the real
+Beeper API. It refuses a commit whose startup script does not run `.live/bin/gentalent`. It
+refuses while a `!!gt` photo search is running (`gentalent busy` says), because a restart
+would abandon it. It refuses while `.live` has local changes (anything `git -C .live status`
+shows), because a checkout keeps them and the bot would run code no test saw. It backs up
+both databases into `.state/backups/` with `gentalent backup`, pins `.live`, installs the
+binary the tests ran against as `.live/bin/gentalent` and restarts. If the bot doesn't stay
+up, it puts `.live` and its binary back on the previous commit. `scripts/deploy-test.sh` runs
+the real deploy script in a throwaway repository to prove each refusal.
 
 It refuses commits from before `.live` existed, because their startup script runs the
 working tree.
@@ -90,17 +87,15 @@ not a database viewer on Windows: recent changes sit in `.state/nominations.sqli
 
 ## Working on it
 
-The bot is the Go program in `cmd/gentalent` (`doc/architecture.md` is the map); the Python
-package in `gentalent/` stays until the Go suite covers every behavior, and nothing runs it.
-`go run ./cmd/gentalent <subcommand>` takes the Python CLI's subcommands and flags, plus
-`busy`, which exits non-zero while a photo search is running. The Go bot keeps its own
-databases, `nominations_database` and `messaging_database` in `config.json`
-(default `.state/nominations.sqlite3` and `.state/messaging.sqlite3`), and imports the
-Python history from `database` the first time it opens them, reading it only. It also
+The bot is the Go program in `cmd/gentalent` (`doc/architecture.md` is the map).
+`go run ./cmd/gentalent` lists its subcommands; `busy` exits non-zero while a photo search is
+running, and `backup --live --label NAME` copies both databases into `backups/` beside them.
+The bot keeps two databases, `nominations_database` and `messaging_database` in
+`config.json` (default `.state/nominations.sqlite3` and `.state/messaging.sqlite3`). It also
 reads `group_open_nomination_limit` and `member_open_nomination_limit` (default 1),
 `single_message_nomination_limit` (3), `allow_renomination` (false) and
 `photo_search_workers` (3, the photo searches it runs at once); a limit below one refuses
-to start. `mise run test` and the deploy check run both suites.
+to start. `mise run test` runs the Go suite and the deploy script checks.
 
 Changes happen in T3 Code worktree threads and ship from the main checkout with
 `mise run ship <branch>`. Commits and pushes are scanned for personal data and secrets
@@ -144,8 +139,8 @@ observed. The send-tracking rules depend on it.
 - `config.json` (real IDs) and `.state/` (ballots, media, backups) are git-ignored.
   `config.example.json` is the template.
 - Outcomes and shames are permanent at the database level (triggers block deletes and
-  updates). Keep `.state/nominations.sqlite3` and `.state/messaging.sqlite3`, and the Python
-  `.state/gentalent.sqlite3` they were first imported from. A fresh database loses the record.
+  updates). Keep `.state/nominations.sqlite3` and `.state/messaging.sqlite3`; a fresh database
+  loses the record.
 - The Beeper token can read and send as your account in every chat. GenTalent limits
   itself to one group and roster, but the token itself has no such limit.
 - `!!gt` strips API-key variables before running the AI CLIs, so they use subscription

@@ -17,7 +17,7 @@ Editing files anywhere never changes the live bot; only a deploy does.
 ## Workflow
 
 1. Work and commit in the thread's worktree, branched from `main`. `mise run test` runs the
-   Python and Go suites and needs no config or network.
+   Go suite and the deploy script checks and needs no config or network.
 2. From the main checkout: `mise run ship <branch>`. It fast-forwards `main`, tests the
    commit in a scratch checkout, runs `doctor --contract` against the real Beeper API,
    refuses while the bot is mid-operation, backs up the ballot, pins `.live`, restarts only
@@ -29,13 +29,12 @@ Branches ship by fast-forward, so rebase onto `main` before shipping if `main` m
 
 ## Never
 
-- Copy `config.json` into a worktree, or run `go run ./cmd/gentalent run --live` (or the
-  Python `python3 -m gentalent run --live`) outside the main checkout. A second live bot
-  would answer every command twice; a machine-wide lock per group refuses it, but do not
-  rely on that.
-- Write to `.state/nominations.sqlite3`, `.state/messaging.sqlite3` or
-  `.state/gentalent.sqlite3` by hand. Rehearse against a copy made with the SQLite backup
-  API, and use `gentalent status` / `resolve-send` for the live one.
+- Copy `config.json` into a worktree, or run `go run ./cmd/gentalent run --live` outside the
+  main checkout. A second live bot would answer every command twice; a machine-wide lock
+  per group refuses it, but do not rely on that.
+- Write to `.state/nominations.sqlite3` or `.state/messaging.sqlite3` by hand. Rehearse
+  against a copy made with `gentalent backup`, and use `gentalent status` / `resolve-send`
+  for the live ones.
 - Run `mise daemons restart`: it also restarts the Beeper app. Deploys stop and start only the bot.
 - Send messages into the group to test something without the owner's go-ahead.
 - Commit personal data: friends' names or phone IDs, account IDs, chat IDs, the owner's
@@ -46,18 +45,20 @@ Branches ship by fast-forward, so rebase onto `main` before shipping if `main` m
 
 ## Code
 
-- One module per chat feature (`shame.py`, `feedback.py`, `reactions.py`): it owns its
-  command, checks and reply text. `workflow.py` routes; `nominees.py` resolves what people
-  type; `replies.py` lays out replies (read its header before writing reply text).
-- New tables: `CREATE TABLE IF NOT EXISTS` in `state.SCHEMA`. Changing an existing table
-  needs a live migration plan; see the ArcLint notes in `doc/plans/next-features.md`.
-- Network calls stay out of chat logic; the polling loop in `runner.py` fetches what a
-  command needs first, and a failed fetch must never stall the poll.
+- `doc/architecture.md` is the map. The live bot is `cmd/gentalent`; the deploy installs the
+  binary its tests ran against as `.live/bin/gentalent`. `cmd/gentalent` is the only place
+  that wires the hexagons, starts goroutines or prints.
+- One file per chat command in `internal/nominations/delivery/chat` (`shame.go`,
+  `feedback.go`, `reactions.go`): it owns the command's parsing and reply text, and its
+  handler in `app/command` or `app/query` owns the change. `bot.go` routes; `references.go`
+  and `nominee_name.go` resolve what people type; `layout.go` lays out replies (read
+  `doc/beeper-api.md` item 7 before writing reply text).
+- A table change is the next numbered migration in that hexagon's `infra/sqlite`, run by
+  `sqlitedb.Migrate` and tracked by `PRAGMA user_version`. Never renumber or drop a migration
+  the live databases have applied, or change the schema it creates.
+- Network calls stay out of chat logic; messaging's poll fetches what a command needs
+  first (the replied-to message), and a failed fetch must never stall the poll.
 - Tests prove behavior that would hurt if it broke. Break the rule a test guards and
   confirm it fails. No tests of formatting trivia or of mocks.
-- The interpreter: inside scratch checkouts the `mise` shim may refuse an untrusted
-  `mise.toml`; scripts resolve `python3` and `go` once at a trusted root and call them by path.
-- Go: the live bot is `cmd/gentalent`; the deploy installs the binary its tests ran against as `.live/bin/gentalent`.
-  `doc/architecture.md` is the map; `cmd/gentalent` is the only place that wires the
-  hexagons, starts goroutines or prints. The Python package stays until the Go suite
-  covers every behavior; nothing runs it.
+- The toolchain: inside scratch checkouts the `mise` shim may refuse an untrusted
+  `mise.toml`; scripts resolve `go` and `jq` once at a trusted root and call them by path.

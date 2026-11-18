@@ -22,7 +22,6 @@ type config struct {
 	AccountID                    string           `json:"account_id"`
 	OwnerID                      string           `json:"owner_id"`
 	Members                      []configMember   `json:"members"`
-	Database                     string           `json:"database"`
 	NominationsDatabase          string           `json:"nominations_database"`
 	MessagingDatabase            string           `json:"messaging_database"`
 	TokenFile                    string           `json:"token_file"`
@@ -84,7 +83,7 @@ func loadConfig(path string) (config, error) {
 		return config{}, fmt.Errorf("%s: %w", absolute, err)
 	}
 	folder := filepath.Dir(absolute)
-	for _, key := range []*string{&cfg.Database, &cfg.NominationsDatabase, &cfg.MessagingDatabase, &cfg.TokenFile, &cfg.MediaDir} {
+	for _, key := range []*string{&cfg.NominationsDatabase, &cfg.MessagingDatabase, &cfg.TokenFile, &cfg.MediaDir} {
 		*key = resolvePath(folder, *key)
 	}
 	return cfg, nil

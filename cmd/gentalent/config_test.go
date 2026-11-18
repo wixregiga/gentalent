@@ -19,7 +19,6 @@ func writeConfig(t *testing.T, dir string, change func(map[string]any)) string {
 			{"id": blairID, "name": "Blair", "platform": "iphone"},
 			{"id": caseyID, "name": "Casey", "platform": "unknown"},
 		},
-		"database":     ".state/gentalent.sqlite3",
 		"token_file":   "secret/beeper.token",
 		"media_dir":    ".state/media",
 		"ai_providers": []map[string]string{{"cli": "codex", "model": "test"}},
@@ -47,14 +46,14 @@ func TestConfigResolvesPathsAgainstItsFolderAndFillsDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Database != filepath.Join(dir, ".state", "gentalent.sqlite3") || cfg.MediaDir != filepath.Join(dir, ".state", "media") {
+	if cfg.MediaDir != filepath.Join(dir, ".state", "media") {
 		t.Fatalf("B205 relative paths resolve against the config folder: %+v", cfg)
 	}
 	if cfg.TokenFile != filepath.Join(dir, "home", ".config", "gentalent", "beeper.token") {
 		t.Fatalf("B205 ~ expands: %s", cfg.TokenFile)
 	}
 	if cfg.NominationsDatabase != filepath.Join(dir, ".state", "nominations.sqlite3") || cfg.MessagingDatabase != filepath.Join(dir, ".state", "messaging.sqlite3") {
-		t.Fatalf("Go databases default beside the Python one: %s %s", cfg.NominationsDatabase, cfg.MessagingDatabase)
+		t.Fatalf("the databases default to .state beside the config: %s %s", cfg.NominationsDatabase, cfg.MessagingDatabase)
 	}
 	settings := cfg.settings()
 	if settings.GroupOpenNominationLimit != 1 || settings.MemberOpenNominationLimit != 1 || settings.SingleMessageNominationLimit != 3 || settings.AllowRenomination {

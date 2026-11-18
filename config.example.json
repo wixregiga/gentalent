@@ -20,7 +20,6 @@
       "platform": "android"
     }
   ],
-  "database": ".state/gentalent.sqlite3",
   "nominations_database": ".state/nominations.sqlite3",
   "messaging_database": ".state/messaging.sqlite3",
   "token_file": "~/.config/gentalent/beeper.token",

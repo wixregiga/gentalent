@@ -26,20 +26,6 @@ exports/
 TEST_RESULTS.txt
 welven_da_great_text/
 
-# Python
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-*.egg-info/
-build/
-dist/
-
 # mise local overrides
 mise.local.toml
 .mise.local.toml

@@ -39,6 +39,7 @@ var subcommands = []subcommand{
 	{"feedback", "List !gtfeedback and !gtsuggest entries (read-only; safe while running).", feedback},
 	{"resolve-send", "Record a checked outcome for an uncertain or failed reply.", resolveSend},
 	{"busy", "Exit non-zero while a photo search is running (read-only; the deploy uses it).", busy},
+	{"backup", "Copy each existing database into backups/ beside it (safe while running; the deploy uses it).", backup},
 	{"generate-media", "Run the subscription-only multi-model photo strip builder.", generateMedia},
 }
 

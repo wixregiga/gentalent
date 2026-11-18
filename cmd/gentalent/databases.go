@@ -22,19 +22,15 @@ import (
 type databasePaths struct {
 	messaging   string
 	nominations string
-	python      string
 }
 
 func (c config) databases(live bool) databasePaths {
-	paths := databasePaths{messaging: c.MessagingDatabase, nominations: c.NominationsDatabase, python: c.Database}
+	paths := databasePaths{messaging: c.MessagingDatabase, nominations: c.NominationsDatabase}
 	if live {
 		return paths
 	}
 	paths.messaging = worker.DryRunDatabase(paths.messaging)
 	paths.nominations = worker.DryRunDatabase(paths.nominations)
-	if paths.python != "" {
-		paths.python = worker.DryRunDatabase(paths.python)
-	}
 	return paths
 }
 
@@ -80,7 +76,7 @@ func openWorker(ctx context.Context, cfg config, live bool, now func() time.Time
 		return nil, err
 	}
 	w.closers = append(w.closers, messaging.Close)
-	if err := sqlitedb.Migrate(ctx, messaging, msqlite.Migrations(paths.python)); err != nil {
+	if err := sqlitedb.Migrate(ctx, messaging, msqlite.Migrations()); err != nil {
 		return nil, fmt.Errorf("migrate %s: %w", paths.messaging, err)
 	}
 	w.inbox = msqlite.New(messaging)
@@ -93,7 +89,7 @@ func openWorker(ctx context.Context, cfg config, live bool, now func() time.Time
 		return nil, err
 	}
 	w.closers = append(w.closers, nominations.Close)
-	if err := sqlitedb.Migrate(ctx, nominations, nsqlite.Migrations(paths.python)); err != nil {
+	if err := sqlitedb.Migrate(ctx, nominations, nsqlite.Migrations()); err != nil {
 		return nil, fmt.Errorf("migrate %s: %w", paths.nominations, err)
 	}
 	store, err := nsqlite.NewStore(ctx, nominations, domain.GroupID(binding), cfg.memberIDs(), cfg.settings())

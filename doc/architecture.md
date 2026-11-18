@@ -64,9 +64,8 @@ Two databases, one per stateful hexagon: `nominations.sqlite3` and `messaging.sq
 each with its own forward-only migrations tracked by `PRAGMA user_version`. Each hexagon's
 `infra/sqlite` imports only `database/sql`: it takes the `*sql.DB` that cmd opened and
 exports its migrations as `[]func(context.Context, *sql.Tx) error`, which cmd runs through
-`sqlitedb.Migrate` at startup. The first
-migration of each imports its share of the Python bot's `gentalent.sqlite3` when that file
-exists, reading it only; the Python file itself is never changed.
+`sqlitedb.Migrate` at startup. Migration 1 of each creates its whole schema. A table change is
+always the next numbered migration, never an edit of one the live databases have applied.
 
 The translation between hexagons lives in one place, `cmd/gentalent/engine.go`: a
 messaging `Incoming` becomes a `chat.Message` (a linked reply tagged `announces/<n>` sets

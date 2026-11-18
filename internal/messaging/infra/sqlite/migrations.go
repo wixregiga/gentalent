@@ -22,13 +22,11 @@ CREATE UNIQUE INDEX outbox_tag ON outbox(tag) WHERE tag <> '';
 CREATE INDEX outbox_attachment ON outbox(attachment_name) WHERE attachment_name <> '';
 `
 
-func Migrations(pythonDatabase string) []func(context.Context, *sql.Tx) error {
+func Migrations() []func(context.Context, *sql.Tx) error {
 	return []func(context.Context, *sql.Tx) error{
 		func(ctx context.Context, tx *sql.Tx) error {
-			if _, err := tx.ExecContext(ctx, schema); err != nil {
-				return err
-			}
-			return importHistory(ctx, tx, pythonDatabase)
+			_, err := tx.ExecContext(ctx, schema)
+			return err
 		},
 	}
 }

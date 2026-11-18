@@ -3,6 +3,7 @@ experimental = true
 
 [tools]
 go = "1.27.1"
+jq = "1.8.1"
 
 [env]
 DISPLAY = ":0"
@@ -29,8 +30,8 @@ retry = true
 proxy = false
 
 [tasks.test]
-description = "Run the Python and Go test suites and the deploy script checks"
-run = ["python3 -m unittest discover -s tests", "go vet ./...", "go test ./...", "bash scripts/deploy-test.sh"]
+description = "Run the Go test suite and the deploy script checks"
+run = ["go vet ./...", "go test ./...", "bash scripts/deploy-test.sh"]
 
 [tasks.privacy]
 description = "Scan every commit on every local branch for personal data and secrets"

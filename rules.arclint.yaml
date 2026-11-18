@@ -277,6 +277,6 @@ rules:
       forbid: '\bfmt\.(Print|Printf|Println)\s*\('
 
   source/no-comments:
-    rationale: "Code carries its meaning in names, types, and tests; comments drift from the code they describe, and lint or type-checker suppressions hide what should be fixed. Compiler directives, license identifiers, and generated files stay. A comment or suppression about something we cannot change stays only through a keep entry that records the proof. Judges Go only: the Python tree is being replaced, and the Go tree starts clean."
+    rationale: "Code carries its meaning in names, types, and tests; comments drift from the code they describe, and lint or type-checker suppressions hide what should be fixed. Compiler directives, license identifiers, and generated files stay. A comment or suppression about something we cannot change stays only through a keep entry that records the proof. Judges Go source."
     files: ["**/*.go"]
     uses: source/no-comments
