@@ -11,11 +11,11 @@ func TestDeliveryEvidence(t *testing.T) {
 		{"success", "pending", Confirmed, Sent},
 		{"retryable failure", "final", RetryableFailure, Failed},
 		{"permanent failure", "final", PermanentFailure, Failed},
-		{"assigned but unconfirmed", "final", AwaitingConfirmation, Pending},
+		{"assigned but unconfirmed", "final", AwaitingConfirmation, Sent},
 		{"bridge omitted status", "final", "", Sent},
 		{"pending id without a tilde", "pending", "", Pending},
 		{"missing id", "", "", Pending},
-		{"unknown status", "final", "unknown", Pending},
+		{"unknown status", "final", "unknown", Sent},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := (Message{ID: tc.id, Status: tc.status}).Delivery("pending"); got != tc.want {

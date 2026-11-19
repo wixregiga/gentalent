@@ -19,7 +19,7 @@ func TestCapturedDeliveryEvidenceThroughSDK(t *testing.T) {
 		httpStatus     int
 		want           domain.State
 	}{
-		{"numeric ID still pending", "~bridge_test_2", "{" + capturedText + `,"sendStatus":{"reason":"Awaiting send confirmation","status":"PENDING","timestamp":"2026-11-16T23:49:39.327Z","deliveredToUsers":[]}}`, 200, domain.Pending},
+		{"numeric ID still pending", "~bridge_test_2", "{" + capturedText + `,"sendStatus":{"reason":"Awaiting send confirmation","status":"PENDING","timestamp":"2026-11-16T23:49:39.327Z","deliveredToUsers":[]}}`, 200, domain.Sent},
 		{"status disappeared", "~bridge_test_2", "{" + capturedText + "}", 200, domain.Sent},
 		{"opaque pending ID", "m1694783291234567", "{" + capturedText + "}", 200, domain.Sent},
 		{"captioned photo resolves to image", "m1694783291234567", capturedImage, 200, domain.Sent},
@@ -88,7 +88,7 @@ func TestLookupHonorsDocumentedDeliveryStatuses(t *testing.T) {
 		"SUCCESS":        domain.Sent,
 		"FAIL_RETRIABLE": domain.Failed,
 		"FAIL_PERMANENT": domain.Failed,
-		"NEW_STATUS":     domain.Pending,
+		"NEW_STATUS":     domain.Sent,
 	} {
 		t.Run(status, func(t *testing.T) {
 			client := testClient(t, func(w http.ResponseWriter, r *http.Request) {

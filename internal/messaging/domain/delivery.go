@@ -40,10 +40,9 @@ func (m Message) Delivery(pendingID string) State {
 		return Failed
 	case Confirmed:
 		return Sent
-	case "":
-		if m.ID != "" && m.ID != pendingID {
-			return Sent
-		}
+	}
+	if m.ID != "" && m.ID != pendingID {
+		return Sent
 	}
 	return Pending
 }

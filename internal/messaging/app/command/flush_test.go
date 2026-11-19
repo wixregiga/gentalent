@@ -84,10 +84,6 @@ func TestFlushStopsAtAnAmbiguousWriteAndNeverRetriesIt(t *testing.T) {
 		t.Fatalf("following flush = %v, sends %v, reads %v, %v", store.rows, platform.posts, platform.lookups, err)
 	}
 	platform.retrieval = map[string]domain.Message{"pending-b": {ID: "final-b", Status: domain.AwaitingConfirmation}}
-	if err := flush.Flush(ctx); err != nil || store.rows[1].State != domain.Pending {
-		t.Fatalf("final ID without delivery evidence = %v, %v", store.rows, err)
-	}
-	platform.retrieval["pending-b"] = domain.Message{ID: "final-b"}
 	if err := flush.Flush(ctx); err != nil || store.rows[1].State != domain.Sent || store.rows[1].FinalID != "final-b" || len(platform.posts) != 2 {
 		t.Fatalf("resolved flush = %v, %v, %v", store.rows, platform.posts, err)
 	}

@@ -28,10 +28,14 @@ Two checks guard these assumptions:
    status "when reported by the bridge", and the spec says optional fields "may be omitted
    when unknown". Its values are `SUCCESS`, `PENDING`, `FAIL_RETRIABLE`, `FAIL_PERMANENT`.
 3. **Observed.** Google Messages never reported `SUCCESS` in this group. A sent message
-   gets its final numeric ID while `sendStatus` still says `PENDING`
-   (`"reason": "Awaiting send confirmation"`). Then the `sendStatus` key disappears.
-   GenTalent therefore counts a reply as sent when `sendStatus` is `SUCCESS`, or when it is
-   absent and the message ID differs from the pending ID.
+   gets its final numeric ID while `sendStatus` can still say `PENDING`
+   (`"reason": "Awaiting send confirmation"`), usually for seconds, and on 2026-11-18 for
+   8 minutes while the bridge stalled. Then the `sendStatus` key disappears. That status is
+   not delivery evidence either way: after the stall, Beeper's own store marked messages
+   `FAIL_RETRIABLE` that people had received, while the API left `sendStatus` out.
+   GenTalent therefore counts a reply as sent once its message ID differs from the pending
+   ID, unless `sendStatus` reports a failure. The API does not tell whether people received
+   a message.
 4. **Observed.** Pending IDs look like `~beeper-mautrix-go_1794872979269056428_2`. The
    spec's example is `m1694783291234567`, so nothing may depend on the `~` prefix.
 5. **Observed.** About 58 minutes after a send, its pending ID returned HTTP 404 (the spec
@@ -98,3 +102,4 @@ Two checks guard these assumptions:
 | Crash loop | Pending ID 404 (item 5) raised out of every poll | 404 marks `uncertain`, polling continues |
 | A 404 "recovery" marked three delivered replies `uncertain` | It guessed by matching text in only the newest 20 messages, by which time the replies were hundreds of IDs back (#264 against #738) | Guessing removed; `resolve-send` checks one named message |
 | A database viewer showed no recent cases | Most likely SQLite WAL (viewer not confirmed): recent commits live in `nominations.sqlite3-wal` and `messaging.sqlite3-wal` until a checkpoint, and WAL does not work over network filesystems ([sqlite.org/wal.html](https://www.sqlite.org/wal.html)) | Use `gentalent status`, or a viewer opened inside WSL |
+| During an 8-minute bridge stall, 11 replies stayed `pending`; the bot looked each one up every poll (about 5 times its normal Beeper load), and reaction votes on them could not count | A final ID counted only once `sendStatus` cleared, and the bridge did not clear it (item 3) | A final ID counts as sent unless `sendStatus` reports a failure |

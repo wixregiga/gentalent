@@ -39,9 +39,9 @@ func TestDoctorChecksObservedEvidenceForRecentSentReplies(t *testing.T) {
 	if err := d.Check(t.Context(), false, true); err != nil {
 		t.Fatal(err)
 	}
-	platform.messages["first"] = domain.Message{ID: "other", FromAccount: false, Text: "wrong", Status: domain.AwaitingConfirmation}
+	platform.messages["first"] = domain.Message{ID: "other", FromAccount: false, Text: "wrong", Status: domain.RetryableFailure}
 	err := d.Check(t.Context(), false, true)
-	for _, text := range []string{"now reads as pending", "no longer reads as sent by this account", "text differs"} {
+	for _, text := range []string{"now reads as failed", "no longer reads as sent by this account", "text differs"} {
 		if err == nil || !strings.Contains(err.Error(), text) {
 			t.Fatalf("expected diagnostic %q in %v", text, err)
 		}
