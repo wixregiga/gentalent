@@ -2,13 +2,11 @@ package domain
 
 import (
 	"errors"
-	"fmt"
 	"time"
 )
 
 type Candidate struct {
 	Spelling   Spelling
-	NewPerson  PersonID
 	Name       string
 	Pitch      string
 	WithPhotos bool
@@ -24,7 +22,7 @@ func (g *Group) Nominate(by MemberID, candidates []Candidate, at time.Time) ([]N
 	if err := next.requireMember(by); err != nil {
 		return nil, err
 	}
-	people, err := next.people(candidates)
+	people, err := next.people(candidates, at)
 	if err != nil {
 		return nil, err
 	}
@@ -88,12 +86,12 @@ func (g *Group) Renominate(by MemberID, candidates []Candidate, at time.Time) ([
 	if err := next.AssertRenominatedOnlyWhenGroupAllows(); err != nil {
 		return nil, err
 	}
-	people, err := next.people(candidates)
+	people, err := next.people(candidates, at)
 	if err != nil {
 		return nil, err
 	}
-	for _, person := range people {
-		if err := next.AssertRenominatedOnlyWhenRejected(person); err != nil {
+	for k, person := range people {
+		if err := next.AssertRenominatedOnlyWhenRejected(person, candidates[k].Spelling); err != nil {
 			return nil, err
 		}
 	}
@@ -133,10 +131,10 @@ func (g *Group) AssertRenominatedOnlyThroughRenomination(person PersonID) error 
 	}
 }
 
-func (g *Group) AssertRenominatedOnlyWhenRejected(person PersonID) error {
+func (g *Group) AssertRenominatedOnlyWhenRejected(person PersonID, spelling Spelling) error {
 	i, ok := g.latestOf(person)
 	if !ok {
-		return Refusal{Rule: RenominatedOnlyWhenRejected, Ref: Ref{Person: person}}
+		return Refusal{Rule: RenominatedOnlyWhenRejected, Ref: Ref{Person: person, Spelling: spelling}}
 	}
 	if latest := g.nominations[i]; latest.Status != Rejected {
 		return Refusal{Rule: RenominatedOnlyWhenRejected, Numbers: []NominationNumber{latest.Number}}
@@ -213,7 +211,7 @@ func (g *Group) openIndexOf(person PersonID) (int, bool) {
 	return i, ok && g.nominations[i].Open()
 }
 
-func (g *Group) people(candidates []Candidate) ([]PersonID, error) {
+func (g *Group) people(candidates []Candidate, at time.Time) ([]PersonID, error) {
 	people := make([]PersonID, len(candidates))
 	unknown := map[Spelling]PersonID{}
 	seen := map[PersonID]bool{}
@@ -221,15 +219,12 @@ func (g *Group) people(candidates []Candidate) ([]PersonID, error) {
 		person, known := g.spellings[candidate.Spelling]
 		if !known {
 			if person, known = unknown[candidate.Spelling]; !known {
-				person = candidate.NewPerson
+				person = newPersonID(at)
 				unknown[candidate.Spelling] = person
 			}
 		}
-		if person == "" {
-			return nil, fmt.Errorf("candidate %q has no Person", candidate.Name)
-		}
 		if seen[person] {
-			return nil, Refusal{Rule: OneOpenNominationPerPerson, Ref: Ref{Person: person}}
+			return nil, Refusal{Rule: OneOpenNominationPerPerson, Ref: Ref{Person: person, Spelling: candidate.Spelling}}
 		}
 		seen[person] = true
 		people[k] = person

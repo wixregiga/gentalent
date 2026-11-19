@@ -84,7 +84,7 @@ func loaded(t *testing.T, store *sqlite.Store) *domain.Group {
 }
 
 func ada() []domain.Candidate {
-	return []domain.Candidate{{Spelling: "adalovelace", NewPerson: "person-ada", Name: "Ada Lovelace", Pitch: "Engines", WithPhotos: true}}
+	return []domain.Candidate{{Spelling: "adalovelace", Name: "Ada Lovelace", Pitch: "Engines", WithPhotos: true}}
 }
 
 func TestStoreKeepsEveryChangeOfTheGroup(t *testing.T) {
@@ -112,7 +112,7 @@ func TestStoreKeepsEveryChangeOfTheGroup(t *testing.T) {
 
 	got := loaded(t, store).Nominations()[0]
 	want := domain.Nomination{
-		Number: 1, Person: domain.Person{ID: "person-ada", Name: "Ada Lovelace"}, Nominator: alex, Status: domain.Rejected,
+		Number: 1, Person: domain.Person{ID: loaded(t, store).Spellings()["adalovelace"], Name: "Ada Lovelace"}, Nominator: alex, Status: domain.Rejected,
 		Votes:       map[domain.MemberID]domain.Vote{alex: domain.Yes, blair: domain.Yes, casey: domain.No},
 		Reactions:   map[domain.MemberID]domain.Vote{casey: domain.No},
 		NominatedAt: today, LockedAt: today.Add(time.Second), FinalizedAt: today.Add(2 * time.Second),
@@ -259,7 +259,7 @@ func TestALimitBelowOneRefusesToOpenTheStore(t *testing.T) {
 func TestReadStanding(t *testing.T) {
 	db := migrated(t)
 	store := newStore(t, db)
-	grace := []domain.Candidate{{Spelling: "gracehopper", NewPerson: "person-grace", Name: "Grace Hopper"}}
+	grace := []domain.Candidate{{Spelling: "gracehopper", Name: "Grace Hopper"}}
 	reject := func(g *domain.Group, number domain.NominationNumber) error {
 		if _, err := g.CastVote(blair, []domain.Ballot{{Nomination: domain.Ref{Number: number}, Vote: domain.No}}, today); err != nil {
 			return err
@@ -310,7 +310,7 @@ func TestReadStanding(t *testing.T) {
 		t.Fatalf("B158 every Nomination with its status and vote count, got %q", listed)
 	}
 	names, err := sqlite.NewReader(db).Names(context.Background())
-	if err != nil || len(names) != 2 || names[0].Person != "person-ada" || names[1].Display != "Grace Hopper" || !names[0].Open || names[1].Open {
+	if err != nil || len(names) != 2 || names[0].Person != loaded(t, store).Spellings()["adalovelace"] || names[1].Display != "Grace Hopper" || !names[0].Open || names[1].Open {
 		t.Fatalf("names come latest Nomination first and say whose Nomination is open, got %+v, %v", names, err)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,8 +19,6 @@ var (
 	roster = []chat.Member{alex, blair, casey}
 	start  = time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
 )
-
-var people atomic.Int64
 
 var oneAtATime = domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}
 
@@ -42,8 +39,7 @@ func newHarness(t *testing.T, settings domain.Settings, change ...func(*chat.Con
 		ids[i] = member.ID
 	}
 	h.ports = newFakePorts(t, ids, settings)
-	config := chat.Config{Members: roster, Settings: settings, PhotoLayout: chat.Individual, MediaDir: "/media", Now: func() time.Time { return h.now },
-		NewPersonID: func() (domain.PersonID, error) { return domain.PersonID(fmt.Sprintf("person-%d", people.Add(1))), nil }}
+	config := chat.Config{Members: roster, Settings: settings, PhotoLayout: chat.Individual, MediaDir: "/media", Now: func() time.Time { return h.now }}
 	for _, apply := range change {
 		apply(&config)
 	}

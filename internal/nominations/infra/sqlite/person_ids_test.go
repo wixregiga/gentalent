@@ -144,7 +144,7 @@ func TestEveryPersonGetsAnOpaqueIDAndKeepsTheirBallot(t *testing.T) {
 	}
 
 	err = store.Apply(context.Background(), "m1", func(g *domain.Group) ([]port.Reply, error) {
-		_, err := g.Nominate(alex, []domain.Candidate{{Spelling: "rinaokafor", NewPerson: "person-new", Name: "Rina Okafor"}}, today)
+		_, err := g.Nominate(alex, []domain.Candidate{{Spelling: "rinaokafor", Name: "Rina Okafor"}}, today)
 		return nil, err
 	})
 	var refusal domain.Refusal

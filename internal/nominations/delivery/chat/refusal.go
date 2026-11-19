@@ -16,7 +16,7 @@ func (w wording) refusal(r domain.Refusal) (string, bool) {
 	switch r.Rule {
 	case domain.OneOpenNominationPerPerson:
 		if r.Ref.Person != "" {
-			return "Named twice in this message: " + w.person(r.Ref.Person) + ".", true
+			return "Named twice in this message: " + w.named(r.Ref) + ".", true
 		}
 		return lines("Already nominated: "+w.name(first)+", "+w.votesIn(w.nomination(first)), "Vote with !!Y or !!N."), true
 	case domain.OpenNominationsWithinGroupLimit:
@@ -36,7 +36,7 @@ func (w wording) refusal(r domain.Refusal) (string, bool) {
 		return w.alreadyDecided(w.nomination(first), r.Renominable), true
 	case domain.RenominatedOnlyWhenRejected:
 		if len(r.Numbers) == 0 {
-			name := w.person(r.Ref.Person)
+			name := w.named(r.Ref)
 			return "Never nominated: " + name + ". Nominate: !gt " + name + ". Pitch", true
 		}
 		if nomination := w.nomination(first); nomination.Open() {

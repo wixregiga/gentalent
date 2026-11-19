@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 func writeConfig(t *testing.T, dir string, change func(map[string]any)) string {
@@ -163,12 +161,5 @@ func TestNameFixesDefaultOffWithEveryMemberAndADay(t *testing.T) {
 	settings := cfg.settings()
 	if settings.AllowNameFixes || settings.NameFixAgreementPercentage != 100 || settings.NameFixWindow != 24*time.Hour {
 		t.Fatalf("name fix defaults: %+v", settings)
-	}
-	id, err := newPersonID()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if parsed, err := uuid.Parse(string(id)); err != nil || parsed.Version() != 7 {
-		t.Fatalf("a new Person ID is a UUIDv7: %q, %v", id, err)
 	}
 }

@@ -12,10 +12,10 @@ import (
 type wording struct {
 	bot   *Bot
 	group *domain.Group
-	typed map[domain.PersonID]string
+	typed map[domain.Spelling]string
 }
 
-func present[R any](b *Bot, key string, typed map[domain.PersonID]string, words func(wording, R) []port.Reply) port.Present[R] {
+func present[R any](b *Bot, key string, typed map[domain.Spelling]string, words func(wording, R) []port.Reply) port.Present[R] {
 	return func(group *domain.Group, result R, err error) ([]port.Reply, error) {
 		w := wording{bot: b, group: group, typed: typed}
 		var refusal domain.Refusal
@@ -59,7 +59,14 @@ func (w wording) person(id domain.PersonID) string {
 			return literal(nomination.Person.Name)
 		}
 	}
-	return literal(w.typed[id])
+	return ""
+}
+
+func (w wording) named(ref domain.Ref) string {
+	if known := w.person(ref.Person); known != "" {
+		return known
+	}
+	return literal(w.typed[ref.Spelling])
 }
 
 func (w wording) member(id domain.MemberID) string {

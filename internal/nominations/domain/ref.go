@@ -1,9 +1,10 @@
 package domain
 
 type Ref struct {
-	Number NominationNumber
-	Person PersonID
-	Close  []PersonID
+	Number   NominationNumber
+	Person   PersonID
+	Spelling Spelling
+	Close    []PersonID
 }
 
 func (r Ref) Unnamed() bool {

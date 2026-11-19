@@ -12,7 +12,7 @@ import (
 )
 
 func misspelledAda() []domain.Candidate {
-	return []domain.Candidate{{Spelling: "adalovelase", NewPerson: "person-ada", Name: "Ada Lovelase"}}
+	return []domain.Candidate{{Spelling: "adalovelase", Name: "Ada Lovelase"}}
 }
 
 func toLovelace(withPhotos bool) domain.NameFixProposal {
@@ -68,10 +68,11 @@ func TestANameFixIsKeptFromProposalToFixedName(t *testing.T) {
 		t.Fatalf("a fixed name fix reloads as fixed:\ngot  %+v\nwant %+v", got, fixed)
 	}
 	nomination, _ := group.Nomination(1)
-	if nomination.Person != (domain.Person{ID: "person-ada", Name: "Ada Lovelace"}) || nomination.Photos != domain.PhotosRequested {
+	ada := proposed.Person
+	if nomination.Person != (domain.Person{ID: ada, Name: "Ada Lovelace"}) || nomination.Photos != domain.PhotosRequested {
 		t.Fatalf("the fixed name and the photo search it asked for are kept, got %+v", nomination)
 	}
-	want := map[domain.Spelling]domain.PersonID{"adalovelase": "person-ada", "adalovelace": "person-ada"}
+	want := map[domain.Spelling]domain.PersonID{"adalovelase": ada, "adalovelace": ada}
 	if got := group.Spellings(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("the new spelling and the earlier spelling both name the Person, got %v", got)
 	}
@@ -80,7 +81,7 @@ func TestANameFixIsKeptFromProposalToFixedName(t *testing.T) {
 		t.Fatalf("both spellings are readable names, got %+v, %v", names, err)
 	}
 	for _, name := range names {
-		if name.Person != "person-ada" || name.Display != "Ada Lovelace" || !name.Open {
+		if name.Person != ada || name.Display != "Ada Lovelace" || !name.Open {
 			t.Fatalf("every spelling shows the fixed name, got %+v", names)
 		}
 	}
@@ -134,7 +135,7 @@ func TestEndedNameFixesAreKeptWithoutChangingTheName(t *testing.T) {
 	if nomination, _ := group.Nomination(1); nomination.Person.Name != "Ada Lovelase" {
 		t.Fatalf("an ended name fix leaves the name, got %+v", nomination.Person)
 	}
-	if spellings := group.Spellings(); len(spellings) != 1 || spellings["adalovelase"] != "person-ada" {
+	if spellings := group.Spellings(); len(spellings) != 1 || spellings["adalovelase"] != first.Person {
 		t.Fatalf("an ended name fix adds no spelling, got %v", spellings)
 	}
 }
@@ -145,7 +146,7 @@ func TestEndedNameFixesArePermanent(t *testing.T) {
 	apply(t, store, "m1", func(g *domain.Group) error { _, err := g.Nominate(alex, misspelledAda(), today); return err })
 	applyFix(t, store, "m2", func(g *domain.Group) (domain.NameFix, error) { return g.ProposeNameFix(alex, toLovelace(false), today) })
 	applyFix(t, store, "m3", func(g *domain.Group) (domain.NameFix, error) { return g.StopNameFix(blair, 1, today) })
-	applyFix(t, store, "m4", func(g *domain.Group) (domain.NameFix, error) { return g.ProposeNameFix(alex, toLovelace(false), today) })
+	pending := applyFix(t, store, "m4", func(g *domain.Group) (domain.NameFix, error) { return g.ProposeNameFix(alex, toLovelace(false), today) })
 
 	if _, err := db.Exec("INSERT INTO name_fix_answers(number, member, answer) VALUES(2, 'member-casey', 'no')"); err != nil {
 		t.Fatalf("a pending name fix still takes answers: %v", err)
@@ -165,14 +166,14 @@ func TestEndedNameFixesArePermanent(t *testing.T) {
 		}
 	}
 	if _, err := db.Exec(`INSERT INTO name_fixes(number, nomination, person_id, from_name, to_name, spelling, proposer, proposed_at, status)
-		VALUES(3, 1, 'person-ada', 'Ada Lovelase', 'Ada Lovelace', 'adalovelace', 'member-casey', '', 'pending')`); err == nil || !strings.Contains(err.Error(), "UNIQUE") {
+		VALUES(3, 1, ?, 'Ada Lovelase', 'Ada Lovelace', 'adalovelace', 'member-casey', '', 'pending')`, pending.Person); err == nil || !strings.Contains(err.Error(), "UNIQUE") {
 		t.Fatalf("the database refuses a second pending name fix for one Person, got %v", err)
 	}
 	if _, err := db.Exec("UPDATE name_fixes SET status = 'fixed' WHERE number = 2"); err != nil {
 		t.Fatalf("a pending name fix may end: %v", err)
 	}
 	if _, err := db.Exec(`INSERT INTO name_fixes(number, nomination, person_id, from_name, to_name, spelling, proposer, proposed_at, status)
-		VALUES(3, 1, 'person-ada', 'Ada Lovelace', 'Ada King', 'adaking', 'member-casey', '', 'fixed')`); err == nil || !strings.Contains(err.Error(), "UNIQUE") {
+		VALUES(3, 1, ?, 'Ada Lovelace', 'Ada King', 'adaking', 'member-casey', '', 'fixed')`, pending.Person); err == nil || !strings.Contains(err.Error(), "UNIQUE") {
 		t.Fatalf("the database refuses a second fixed name fix for one Person, got %v", err)
 	}
 }

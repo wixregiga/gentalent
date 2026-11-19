@@ -223,3 +223,11 @@ func TestTheVerdictCarriesTheStripInTheIndividualLayout(t *testing.T) {
 		})
 	}
 }
+
+func TestANewPersonNamedTwiceInOneMessageIsNamedAsTyped(t *testing.T) {
+	h := newHarness(t, oneAtATime)
+	contains(t, h.say(alex, "!gt Remy Quill. One !gt remy quill. Two"), "Named twice in this message: Remy Quill.")
+	if len(h.open()) != 0 {
+		t.Fatalf("a refused message opened %+v", h.open())
+	}
+}

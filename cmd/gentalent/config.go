@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
 	aidomain "gentalent/internal/ai/domain"
 	mdomain "gentalent/internal/messaging/domain"
 	"gentalent/internal/nominations/delivery/chat"
@@ -213,7 +211,6 @@ func (c config) chat(now func() time.Time) chat.Config {
 		MediaDir:              c.MediaDir,
 		AnnounceReactionVotes: c.AnnounceReactionVotes,
 		Now:                   now,
-		NewPersonID:           newPersonID,
 	}
 }
 
@@ -232,14 +229,6 @@ func (c config) providers(only string) ([]aidomain.Provider, error) {
 
 func (c config) pollEvery() time.Duration {
 	return time.Duration(c.PollSeconds * float64(time.Second))
-}
-
-func newPersonID() (domain.PersonID, error) {
-	id, err := uuid.NewV7()
-	if err != nil {
-		return "", fmt.Errorf("make a Person ID: %w", err)
-	}
-	return domain.PersonID(id.String()), nil
 }
 
 func settingsError(err error) error {

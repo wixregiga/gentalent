@@ -192,9 +192,9 @@ func TestEarlierSpellingsStillNameThePerson(t *testing.T) {
 			t.Fatalf("%q names %q, want %q", typed, spellings[spelling(typed)], misspelled.ID)
 		}
 	}
-	_, err := group.Nominate(blair.ID, []domain.Candidate{{Spelling: spelling("Ada Lovelase"), NewPerson: "someone-new", Name: "Ada Lovelase"}}, today)
+	_, err := group.Nominate(blair.ID, []domain.Candidate{{Spelling: spelling("Ada Lovelase"), Name: "Ada Lovelase"}}, today)
 	refusal(t, err, domain.RenominatedOnlyThroughRenomination)
-	renominated, err := group.Renominate(blair.ID, []domain.Candidate{{Spelling: spelling("Ada Lovelase"), NewPerson: "someone-new", Name: "Ada Lovelase"}}, today)
+	renominated, err := group.Renominate(blair.ID, []domain.Candidate{{Spelling: spelling("Ada Lovelase"), Name: "Ada Lovelase"}}, today)
 	if err != nil || renominated[0].Person.ID != misspelled.ID || renominated[0].Person.Name != "Ada Lovelace" {
 		t.Fatalf("renominating by the old spelling: %+v, %v", renominated, err)
 	}

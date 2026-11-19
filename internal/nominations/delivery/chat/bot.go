@@ -31,7 +31,6 @@ type Config struct {
 	MediaDir              string
 	AnnounceReactionVotes bool
 	Now                   func() time.Time
-	NewPersonID           func() (domain.PersonID, error)
 }
 
 type Ports struct {

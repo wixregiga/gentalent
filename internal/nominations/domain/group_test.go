@@ -82,7 +82,7 @@ func finalized(number domain.NominationNumber, person domain.Person, status doma
 func candidates(people ...domain.Person) []domain.Candidate {
 	list := make([]domain.Candidate, 0, len(people))
 	for _, person := range people {
-		list = append(list, domain.Candidate{Spelling: domain.Spelling(person.ID), NewPerson: person.ID, Name: person.Name, Pitch: "A pitch for " + person.Name})
+		list = append(list, domain.Candidate{Spelling: domain.Spelling(person.ID), Name: person.Name, Pitch: "A pitch for " + person.Name})
 	}
 	return list
 }
@@ -174,7 +174,7 @@ func TestOneOpenNominationPerPerson(t *testing.T) {
 
 	_, err = group.Nominate(blair.ID, candidates(grace, grace), today)
 	refused = refusal(t, err, domain.OneOpenNominationPerPerson)
-	if !reflect.DeepEqual(refused.Ref, domain.Ref{Person: grace.ID}) {
+	if refused.Ref.Spelling != domain.Spelling(grace.ID) || refused.Ref.Person == "" {
 		t.Fatalf("a message naming Grace twice must name her, got %+v", refused.Ref)
 	}
 	wantUnchanged(t, group, before)
@@ -208,7 +208,7 @@ func TestOpenNominationsWithinGroupLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a Group below its limit must accept the nomination: %v", err)
 	}
-	if len(opened) != 1 || nomination(t, group, opened[0].Number).Person != katherine {
+	if len(opened) != 1 || nomination(t, group, opened[0].Number).Person.Name != katherine.Name || group.Spellings()[domain.Spelling(katherine.ID)] != nomination(t, group, opened[0].Number).Person.ID {
 		t.Fatalf("want Katherine opened, got %+v", opened)
 	}
 }
@@ -245,7 +245,7 @@ func TestOpenNominationsWithinMemberLimit(t *testing.T) {
 		t.Fatalf("Blair has room under the member limit: %v", err)
 	}
 	got := nomination(t, group, opened[0].Number)
-	if got.Person.ID != grace.ID || got.Nominator != blair.ID || got.Votes[blair.ID] != domain.Yes {
+	if got.Person.Name != grace.Name || got.Person.ID != group.Spellings()[domain.Spelling(grace.ID)] || got.Nominator != blair.ID || got.Votes[blair.ID] != domain.Yes {
 		t.Fatalf("want Grace nominated by Blair with Blair's yes, got %+v", got)
 	}
 }
@@ -362,7 +362,7 @@ func TestRenominatedOnlyThroughRenomination(t *testing.T) {
 		t.Fatal("a rejected Person in a Group that allows renomination must be offered it")
 	}
 
-	renominated, err := group.Renominate(blair.ID, []domain.Candidate{{Spelling: domain.Spelling(ada.ID), NewPerson: ada.ID, Name: "ADA LOVELACE", Pitch: "Engines"}}, today)
+	renominated, err := group.Renominate(blair.ID, []domain.Candidate{{Spelling: domain.Spelling(ada.ID), Name: "ADA LOVELACE", Pitch: "Engines"}}, today)
 	if err != nil {
 		t.Fatalf("renomination must open a Nomination: %v", err)
 	}
@@ -389,7 +389,7 @@ func TestRenominatedOnlyWhenRejected(t *testing.T) {
 
 	_, err = group.Renominate(blair.ID, candidates(katherine), today)
 	refused = refusal(t, err, domain.RenominatedOnlyWhenRejected)
-	if !reflect.DeepEqual(refused.Ref, domain.Ref{Person: katherine.ID}) || len(refused.Numbers) != 0 {
+	if refused.Ref.Spelling != domain.Spelling(katherine.ID) || len(refused.Numbers) != 0 {
 		t.Fatalf("a Person never nominated must be named with no Nomination, got %+v", refused)
 	}
 	wantUnchanged(t, group, before)
