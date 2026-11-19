@@ -141,6 +141,14 @@ rules:
     imports:
       internal: [domain, shared]
 
+  aggregate/members-by-identity:
+    rationale: "An entity is one thing whose attributes change while it stays the same (Evans, DDD Reference 2015, p. 11). A member that holds another member by value keeps a copy a change never reaches, so only the root holds each member and the others refer to it by its identity."
+    on: domain
+    files: "internal/*/domain/**/*.go"
+    uses: aggregate/members-by-identity
+    with:
+      zones: [domain]
+
   ports/interfaces-in-port-zone:
     rationale: "Every interface is a port and lives in its hexagon's port package, so an agent finds every seam in one place and no adapter or use case grows a private abstraction."
     files: ["internal/**/*.go", "cmd/**/*.go"]

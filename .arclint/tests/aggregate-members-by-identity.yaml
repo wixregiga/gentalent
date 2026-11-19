@@ -1,0 +1,17 @@
+rule: aggregate/members-by-identity
+files:
+  go.mod: "module gentalent\n\ngo 1.27\n"
+  domain.arclint.yaml: "version: 1\nproject: Fixture\ncontexts:\n  nominations:\n    definition: The nomination process.\n    aggregates:\n      Group:\n        definition: The Members and their shared chat space.\n        identity: GroupID\n        entities:\n          Nomination:\n            definition: A proposal.\n            identity: NominationNumber\n          Person:\n            definition: Someone nominated.\n            identity: PersonID\n"
+  internal/nominations/domain/group.go: "package domain\n\ntype GroupID string\n\ntype Group struct {\n\tpersons     map[PersonID]Person\n\tnominations []Nomination\n}\n"
+  internal/nominations/domain/person.go: "package domain\n\ntype PersonID string\n\ntype Person struct {\n\tID   PersonID\n\tName string\n}\n"
+  internal/nominations/domain/nomination.go: "package domain\n\ntype NominationNumber int\n\ntype Nomination struct {\n\tNumber NominationNumber\n\tPerson Person\n\tWho    PersonID\n\tAlso   []*Person\n}\n"
+  internal/nominations/domain/nomination_test.go: "package domain\n\ntype fixture struct {\n\tPerson Person\n}\n"
+expect:
+- kind: violation
+  path: internal/nominations/domain/nomination.go
+  line: 7
+  message: "aggregate Group: field Nomination.Person holds Person, a member of Group; only the root holds a member, and Nomination refers to it by PersonID"
+- kind: violation
+  path: internal/nominations/domain/nomination.go
+  line: 9
+  message: "aggregate Group: field Nomination.Also holds Person, a member of Group; only the root holds a member, and Nomination refers to it by PersonID"
