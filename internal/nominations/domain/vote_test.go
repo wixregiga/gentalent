@@ -7,7 +7,7 @@ import (
 	"gentalent/internal/nominations/domain"
 )
 
-var oneAtATime = domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}
+var oneAtATime = domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}
 
 func vote(t *testing.T, group *domain.Group, member member, choice domain.Vote) []domain.VoteOutcome {
 	t.Helper()
@@ -66,7 +66,7 @@ func TestRepeatedVotesAndEmptyClearsAreSilent(t *testing.T) {
 }
 
 func TestVotesNamingAClosedOrUnknownNominationCountNothing(t *testing.T) {
-	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 2, SingleMessageNominationLimit: 3},
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 2, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour},
 		finalized(1, grace, domain.Certified), open(2, ada, alex))
 	before := snapshot(group)
 	cases := []struct {
@@ -160,7 +160,7 @@ func TestThirdVoteByReactionStartsTheTimer(t *testing.T) {
 
 func TestCloseSpellingNamesOnlyAnOpenNomination(t *testing.T) {
 	sofia := domain.Person{ID: "sofíavergara", Name: "Sofía Vergara"}
-	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3},
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour},
 		finalized(1, grace, domain.Rejected), open(2, sofia, alex), open(3, ada, alex))
 	before := snapshot(group)
 
@@ -190,7 +190,7 @@ func TestCloseSpellingNamesOnlyAnOpenNomination(t *testing.T) {
 
 func TestCloseSpellingNamesOneNomination(t *testing.T) {
 	adam := domain.Person{ID: "adamdriver", Name: "Adam Driver"}
-	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3},
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour},
 		open(1, ada, alex), open(2, adam, alex))
 	before := snapshot(group)
 

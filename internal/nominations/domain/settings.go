@@ -1,12 +1,18 @@
 package domain
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type Settings struct {
 	GroupOpenNominationLimit     int
 	MemberOpenNominationLimit    int
 	SingleMessageNominationLimit int
 	AllowRenomination            bool
+	AllowNameFixes               bool
+	NameFixAgreementPercentage   int
+	NameFixWindow                time.Duration
 }
 
 type Limit string
@@ -24,4 +30,20 @@ type LimitBelowOne struct {
 
 func (e LimitBelowOne) Error() string {
 	return fmt.Sprintf("the %s is %d; it must be at least 1", e.Limit, e.Value)
+}
+
+type AgreementPercentageOutOfRange struct {
+	Value int
+}
+
+func (e AgreementPercentageOutOfRange) Error() string {
+	return fmt.Sprintf("the name fix agreement percentage is %d; it must be more than 0 and at most 100", e.Value)
+}
+
+type NameFixWindowBelowAnHour struct {
+	Value time.Duration
+}
+
+func (e NameFixWindowBelowAnHour) Error() string {
+	return fmt.Sprintf("the name fix window is %s; it must be at least one hour", e.Value)
 }

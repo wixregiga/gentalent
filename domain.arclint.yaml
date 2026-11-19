@@ -32,6 +32,11 @@ contexts:
               A message to a Member of the Group that calls them out over a
               Person or a Nomination, which it refers to by its identity.
             identity: ShameID
+          NameFix:
+            definition: >-
+              A Member's proposal to correct how a Person's name is spelled,
+              which Members agree to or say no to.
+            identity: NameFixNumber
         invariants:
           nomination-limit-not-less-than-one:
             statement: Every nomination limit a Group sets is at least one.
@@ -45,6 +50,23 @@ contexts:
             statement: A finalized Nomination certifies its Person only when every Member voted yes; any no rejects them.
             verified_by:
               - internal/nominations/domain/finalize_test.go:TestCertifiedByUnanimousYes
+          one-pending-name-fix-per-person:
+            statement: A Person has at most one pending NameFix.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestOnePendingNameFixPerPerson
+              - internal/nominations/infra/sqlite/name_fix_store_test.go:TestEndedNameFixesArePermanent
+          name-fix-agreement-percentage-within-range:
+            statement: >-
+              Every name fix agreement percentage a Group sets is more than 0
+              and at most 100.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixAgreementPercentageWithinRange
+              - cmd/gentalent/config_test.go:TestNameFixSettingsOutOfRangeRefuseToStartAndNameTheSetting
+          name-fix-window-at-least-one-hour:
+            statement: Every name fix window a Group sets is at least one hour.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixWindowAtLeastOneHour
+              - cmd/gentalent/config_test.go:TestNameFixSettingsOutOfRangeRefuseToStartAndNameTheSetting
         assertions:
           open-nominations-within-group-limit:
             on: Nominate
@@ -160,6 +182,62 @@ contexts:
             verified_by:
               - internal/nominations/domain/vote_test.go:TestCloseSpellingNamesOneNomination
               - internal/nominations/delivery/chat/vote_test.go:TestCloseSpellingThatFitsTwoOpenNominationsNamesNone
+          name-fixed-only-when-enough-members-agree:
+            on: AgreeToNameFix
+            statement: >-
+              A Person's name is fixed only once the Group's name fix agreement
+              percentage of Members agree to the NameFix.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixedOnlyWhenEnoughMembersAgree
+              - internal/nominations/delivery/chat/name_fix_test.go:TestAMisspelledNameIsFixedWhenEveryMemberAgrees
+              - internal/nominations/delivery/chat/name_fix_test.go:TestAFixNeedsOnlyTheConfiguredShareOfMembers
+          name-fixed-once-per-person:
+            on: AgreeToNameFix
+            statement: A Person's name is fixed at most once.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixedOncePerPerson
+              - internal/nominations/delivery/chat/name_fix_test.go:TestNameFixRefusals
+          name-fix-never-takes-another-persons-spelling:
+            on: AgreeToNameFix
+            statement: >-
+              A Person's name is never fixed to a spelling that names another
+              Person.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixNeverTakesAnotherPersonsSpelling
+              - internal/nominations/delivery/chat/name_fix_test.go:TestNameFixRefusals
+          earlier-spellings-still-name-the-person:
+            on: AgreeToNameFix
+            statement: >-
+              A Person's earlier spellings still name them after their name is
+              fixed.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestEarlierSpellingsStillNameThePerson
+              - internal/nominations/delivery/chat/name_fix_test.go:TestBothSpellingsKeepNamingTheFixedPerson
+              - internal/nominations/infra/sqlite/name_fix_store_test.go:TestANameFixIsKeptFromProposalToFixedName
+              - internal/nominations/infra/sqlite/person_ids_test.go:TestEveryPersonGetsAnOpaqueIDAndKeepsTheirBallot
+          name-fix-stopped-when-agreement-is-out-of-reach:
+            on: StopNameFix
+            statement: >-
+              A NameFix stops for good once so many Members say no that it can
+              no longer reach the agreement percentage.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixStoppedWhenAgreementIsOutOfReach
+              - internal/nominations/delivery/chat/name_fix_test.go:TestOneNoStopsAFixThatNeedsEveryMember
+          name-fix-lapses-after-the-name-fix-window:
+            on: ExpireNameFixes
+            statement: >-
+              A NameFix without enough agreement when the Group's name fix
+              window ends lapses without fixing the name.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixLapsesAfterTheNameFixWindow
+              - internal/nominations/delivery/chat/name_fix_test.go:TestAnUnansweredFixLapsesAfterItsWindow
+          name-fixed-only-when-group-allows:
+            on: ProposeNameFix
+            statement: >-
+              A Person's name is fixed only if the Group allows name fixes.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixedOnlyWhenGroupAllows
+              - internal/nominations/delivery/chat/name_fix_test.go:TestNameFixRefusals
     value_objects:
       CertificationStatus:
         definition: >-
@@ -169,6 +247,10 @@ contexts:
       GenerationalTalent:
         definition: >-
           A Person who has been certified through the nomination process.
+    questions:
+      group-of-any-size: >-
+        The Group is moving from exactly three Members to any number of Members.
+        Which rules that count three Members change, and how?
   messaging:
     definition: >-
       The Group's conversation, whatever platform carries it: the messages,

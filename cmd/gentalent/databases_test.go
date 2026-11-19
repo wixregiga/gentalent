@@ -69,8 +69,8 @@ func TestAMigratedDatabaseReopensUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 	nominations, messaging := shapeOf(t, ctx, cfg.NominationsDatabase), shapeOf(t, ctx, cfg.MessagingDatabase)
-	if nominations.version != 1 || !hasTables(nominations, "meta", "persons", "aliases", "nominations", "votes", "reactions", "exhibits", "shames", "feedback", "handled", "outbox") {
-		t.Fatalf("a fresh nominations database gets the whole schema at version 1: %+v", nominations)
+	if nominations.version != 2 || !hasTables(nominations, "meta", "persons", "aliases", "nominations", "votes", "reactions", "exhibits", "shames", "feedback", "handled", "outbox", "name_fixes", "name_fix_answers") {
+		t.Fatalf("a fresh nominations database gets the whole schema at version 2: %+v", nominations)
 	}
 	if messaging.version != 1 || !hasTables(messaging, "meta", "processed", "inbox", "outbox") {
 		t.Fatalf("a fresh messaging database gets the whole schema at version 1: %+v", messaging)

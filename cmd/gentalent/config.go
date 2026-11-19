@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	aidomain "gentalent/internal/ai/domain"
 	mdomain "gentalent/internal/messaging/domain"
 	"gentalent/internal/nominations/delivery/chat"
@@ -35,6 +37,9 @@ type config struct {
 	MemberOpenNominationLimit    int              `json:"member_open_nomination_limit"`
 	SingleMessageNominationLimit int              `json:"single_message_nomination_limit"`
 	AllowRenomination            bool             `json:"allow_renomination"`
+	AllowNameFixes               bool             `json:"allow_name_fixes"`
+	NameFixAgreementPercent      int              `json:"name_fix_agreement_percent"`
+	NameFixHours                 int              `json:"name_fix_hours"`
 }
 
 type configMember struct {
@@ -72,6 +77,8 @@ func loadConfig(path string) (config, error) {
 		GroupOpenNominationLimit:     1,
 		MemberOpenNominationLimit:    1,
 		SingleMessageNominationLimit: 3,
+		NameFixAgreementPercent:      100,
+		NameFixHours:                 24,
 		NominationsDatabase:          ".state/nominations.sqlite3",
 		MessagingDatabase:            ".state/messaging.sqlite3",
 	}
@@ -188,6 +195,9 @@ func (c config) settings() domain.Settings {
 		MemberOpenNominationLimit:    c.MemberOpenNominationLimit,
 		SingleMessageNominationLimit: c.SingleMessageNominationLimit,
 		AllowRenomination:            c.AllowRenomination,
+		AllowNameFixes:               c.AllowNameFixes,
+		NameFixAgreementPercentage:   c.NameFixAgreementPercent,
+		NameFixWindow:                time.Duration(c.NameFixHours) * time.Hour,
 	}
 }
 
@@ -203,6 +213,7 @@ func (c config) chat(now func() time.Time) chat.Config {
 		MediaDir:              c.MediaDir,
 		AnnounceReactionVotes: c.AnnounceReactionVotes,
 		Now:                   now,
+		NewPersonID:           newPersonID,
 	}
 }
 
@@ -223,10 +234,26 @@ func (c config) pollEvery() time.Duration {
 	return time.Duration(c.PollSeconds * float64(time.Second))
 }
 
-func limitError(err error) error {
+func newPersonID() (domain.PersonID, error) {
+	id, err := uuid.NewV7()
+	if err != nil {
+		return "", fmt.Errorf("make a Person ID: %w", err)
+	}
+	return domain.PersonID(id.String()), nil
+}
+
+func settingsError(err error) error {
 	var below domain.LimitBelowOne
 	if errors.As(err, &below) {
 		return fmt.Errorf("%s is %d; it must be at least 1", limitKeys[below.Limit], below.Value)
+	}
+	var percentage domain.AgreementPercentageOutOfRange
+	if errors.As(err, &percentage) {
+		return fmt.Errorf("name_fix_agreement_percent is %d; it must be more than 0 and at most 100", percentage.Value)
+	}
+	var window domain.NameFixWindowBelowAnHour
+	if errors.As(err, &window) {
+		return fmt.Errorf("name_fix_hours is %d; it must be at least 1", int(window.Value/time.Hour))
 	}
 	return err
 }

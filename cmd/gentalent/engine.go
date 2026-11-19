@@ -112,8 +112,9 @@ func (e *engine) cycle(ctx context.Context) error {
 	claimed := e.claimPhotoSearches(ctx)
 	reactions := e.countReactions(ctx)
 	due := e.bot.FinalizeDue(ctx, e.now())
+	lapsed := e.bot.ExpireNameFixes(ctx, e.now())
 	relay := e.relay(ctx)
-	return errors.Join(attached, inbox, claimed, reactions, due, relay, e.flusher.Flush(ctx))
+	return errors.Join(attached, inbox, claimed, reactions, due, lapsed, relay, e.flusher.Flush(ctx))
 }
 
 func (e *engine) applyInbox(ctx context.Context) error {

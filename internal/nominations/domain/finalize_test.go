@@ -17,7 +17,7 @@ func locked(number domain.NominationNumber, person domain.Person, nominator memb
 	return nomination
 }
 
-var severalAtOnce = domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3}
+var severalAtOnce = domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}
 
 func TestCertifiedByUnanimousYes(t *testing.T) {
 	group := newGroup(t, severalAtOnce, locked(1, ada, alex, domain.Yes, today), locked(2, grace, alex, domain.No, today))
@@ -34,7 +34,7 @@ func TestCertifiedByUnanimousYes(t *testing.T) {
 
 	forged := finalized[1]
 	forged.Status = domain.Certified
-	_, err = domain.NewGroup("group-test", memberIDs, severalAtOnce, []domain.Nomination{forged}, nil)
+	_, err = loaded(severalAtOnce, forged)
 	refused := refusal(t, err, domain.CertifiedByUnanimousYes)
 	wantNumbers(t, refused.Numbers, 2)
 }

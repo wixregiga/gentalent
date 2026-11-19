@@ -94,7 +94,7 @@ func openWorker(ctx context.Context, cfg config, live bool, now func() time.Time
 	}
 	store, err := nsqlite.NewStore(ctx, nominations, domain.GroupID(binding), cfg.memberIDs(), cfg.settings())
 	if err != nil {
-		return nil, limitError(err)
+		return nil, settingsError(err)
 	}
 	readSide, err := sqlitedb.Open(ctx, paths.nominations, sqlitedb.ReadOnly)
 	if err != nil {

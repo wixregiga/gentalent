@@ -59,7 +59,7 @@ func (known names) named(text string) (reference, bool) {
 	}
 	words := strings.Fields(text)
 	for count := min(len(words), referenceWords); count > 0; count-- {
-		key := personKey(strings.Join(words[:count], " "))
+		key := spellingOf(strings.Join(words[:count], " "))
 		if key == "" {
 			continue
 		}
@@ -103,10 +103,10 @@ func numbered(match []string, rest string) reference {
 
 func (known names) nearMiss(words []string) string {
 	if len(words) > 0 {
-		first := personKey(possessive.ReplaceAllString(words[0], ""))
+		first := spellingOf(possessive.ReplaceAllString(words[0], ""))
 		if utf8.RuneCountInString(string(first)) >= firstNameMinLength {
 			for _, name := range known {
-				if fields := strings.Fields(name.Display); len(fields) > 0 && personKey(fields[0]) == first {
+				if fields := strings.Fields(name.Display); len(fields) > 0 && spellingOf(fields[0]) == first {
 					return name.Display
 				}
 			}
@@ -114,7 +114,7 @@ func (known names) nearMiss(words []string) string {
 	}
 	best, bestRatio := "", suggestionRatio
 	for count := 1; count <= min(len(words), referenceWords); count++ {
-		key := string(personKey(strings.Join(words[:count], " ")))
+		key := string(spellingOf(strings.Join(words[:count], " ")))
 		if utf8.RuneCountInString(key) < suggestionMinLength {
 			continue
 		}

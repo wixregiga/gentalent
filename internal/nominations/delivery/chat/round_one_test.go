@@ -1,13 +1,15 @@
 package chat_test
 
 import (
+	"time"
+
 	"testing"
 
 	"gentalent/internal/nominations/domain"
 )
 
 func severalOpen(group, member int) domain.Settings {
-	return domain.Settings{GroupOpenNominationLimit: group, MemberOpenNominationLimit: member, SingleMessageNominationLimit: 3}
+	return domain.Settings{GroupOpenNominationLimit: group, MemberOpenNominationLimit: member, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}
 }
 
 func TestScenarioANominationBeyondTheGroupLimitIsRefused(t *testing.T) {
@@ -27,7 +29,7 @@ func TestScenarioLoweringTheLimitRefusesOnlyNewNominations(t *testing.T) {
 	h.send(blair, "!gt Ada Lovelace. Engines")
 	h.send(casey, "!gt Grace Hopper. Compilers")
 	lowered := newHarness(t, severalOpen(1, 1))
-	lowered.ports.nominations = h.ports.nominations
+	lowered.ports.nominations, lowered.ports.spellings = h.ports.nominations, h.ports.spellings
 
 	contains(t, lowered.say(alex, "!gt Katherine Johnson. Orbital math"), "Finish voting first")
 	lowered.say(alex, "!!Y 1")

@@ -27,8 +27,8 @@ func TestSimilarityIsTheRatcliffObershelpRatio(t *testing.T) {
 	}
 }
 
-func TestPersonKeyFoldsANameToItsLettersAndDigits(t *testing.T) {
-	cases := map[string]domain.PersonID{
+func TestSpellingFoldsANameToItsLettersAndDigits(t *testing.T) {
+	cases := map[string]domain.Spelling{
 		"ﬁona Ｖale²":     "fionavale2",
 		"José Vale":     "josévale",
 		"STRASSE Straße": "strassestrasse",
@@ -37,8 +37,8 @@ func TestPersonKeyFoldsANameToItsLettersAndDigits(t *testing.T) {
 		"ǅemal":          "džemal",
 	}
 	for name, want := range cases {
-		if got := personKey(name); got != want {
-			t.Fatalf("B34 the key of %q is %q, got %q", name, want, got)
+		if got := spellingOf(name); got != want {
+			t.Fatalf("B34 the spelling of %q is %q, got %q", name, want, got)
 		}
 	}
 }

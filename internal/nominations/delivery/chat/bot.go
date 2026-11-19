@@ -31,6 +31,7 @@ type Config struct {
 	MediaDir              string
 	AnnounceReactionVotes bool
 	Now                   func() time.Time
+	NewPersonID           func() (domain.PersonID, error)
 }
 
 type Ports struct {
@@ -43,37 +44,43 @@ type Ports struct {
 
 type Bot struct {
 	*Reader
-	nominate   command.NominateHandler
-	renominate command.RenominateHandler
-	castVote   command.CastVoteHandler
-	finalize   command.FinalizeHandler
-	due        command.FinalizeDueHandler
-	reactions  command.CountReactionsHandler
-	shame      command.ShameHandler
-	claim      command.ClaimPhotoSearchesHandler
-	finish     command.FinishPhotoSearchHandler
-	abandon    command.AbandonInterruptedSearchesHandler
-	feedback   command.RecordFeedbackHandler
-	answer     command.AnswerHandler
-	relayed    command.MarkRelayedHandler
+	nominate     command.NominateHandler
+	renominate   command.RenominateHandler
+	castVote     command.CastVoteHandler
+	finalize     command.FinalizeHandler
+	due          command.FinalizeDueHandler
+	reactions    command.CountReactionsHandler
+	shame        command.ShameHandler
+	proposeFixes command.ProposeNameFixesHandler
+	answerFix    command.AnswerNameFixHandler
+	expireFixes  command.ExpireNameFixesHandler
+	claim        command.ClaimPhotoSearchesHandler
+	finish       command.FinishPhotoSearchHandler
+	abandon      command.AbandonInterruptedSearchesHandler
+	feedback     command.RecordFeedbackHandler
+	answer       command.AnswerHandler
+	relayed      command.MarkRelayedHandler
 }
 
 func NewBot(config Config, ports Ports) *Bot {
 	return &Bot{
-		Reader:     NewReader(config, ports.ReadPorts),
-		nominate:   command.NominateHandler{Groups: ports.Groups},
-		renominate: command.RenominateHandler{Groups: ports.Groups},
-		castVote:   command.CastVoteHandler{Groups: ports.Groups},
-		finalize:   command.FinalizeHandler{Groups: ports.Groups},
-		due:        command.FinalizeDueHandler{Groups: ports.Groups},
-		reactions:  command.CountReactionsHandler{Groups: ports.Groups},
-		shame:      command.ShameHandler{Groups: ports.Groups, Gifs: ports.Gifs},
-		claim:      command.ClaimPhotoSearchesHandler{Groups: ports.Groups},
-		finish:     command.FinishPhotoSearchHandler{Groups: ports.Groups},
-		abandon:    command.AbandonInterruptedSearchesHandler{Groups: ports.Groups},
-		feedback:   command.RecordFeedbackHandler{Feedback: ports.Feedback},
-		answer:     command.AnswerHandler{Outbox: ports.Outbox},
-		relayed:    command.MarkRelayedHandler{Outbox: ports.Outbox},
+		Reader:       NewReader(config, ports.ReadPorts),
+		nominate:     command.NominateHandler{Groups: ports.Groups},
+		renominate:   command.RenominateHandler{Groups: ports.Groups},
+		castVote:     command.CastVoteHandler{Groups: ports.Groups},
+		finalize:     command.FinalizeHandler{Groups: ports.Groups},
+		due:          command.FinalizeDueHandler{Groups: ports.Groups},
+		reactions:    command.CountReactionsHandler{Groups: ports.Groups},
+		shame:        command.ShameHandler{Groups: ports.Groups, Gifs: ports.Gifs},
+		proposeFixes: command.ProposeNameFixesHandler{Groups: ports.Groups},
+		answerFix:    command.AnswerNameFixHandler{Groups: ports.Groups},
+		expireFixes:  command.ExpireNameFixesHandler{Groups: ports.Groups},
+		claim:        command.ClaimPhotoSearchesHandler{Groups: ports.Groups},
+		finish:       command.FinishPhotoSearchHandler{Groups: ports.Groups},
+		abandon:      command.AbandonInterruptedSearchesHandler{Groups: ports.Groups},
+		feedback:     command.RecordFeedbackHandler{Feedback: ports.Feedback},
+		answer:       command.AnswerHandler{Outbox: ports.Outbox},
+		relayed:      command.MarkRelayedHandler{Outbox: ports.Outbox},
 	}
 }
 
@@ -89,6 +96,8 @@ var routes = []route{
 	{regexp.MustCompile(`(?is)^!gtshame(?:\s+(.*))?$`), (*Bot).shameOver},
 	{regexp.MustCompile(`(?is)^!gt(feedback|suggest)(?:\s+(.*))?$`), (*Bot).recordFeedback},
 	{regexp.MustCompile(`(?is)^!{1,2}gtrenominate(?:\s.*)?$`), (*Bot).renominateAll},
+	{regexp.MustCompile(`(?is)^!{1,2}gtfix(yes|no)(?:\s+(.*))?$`), (*Bot).answerNameFix},
+	{regexp.MustCompile(`(?is)^!{1,2}gtfix(?:\s.*)?$`), (*Bot).proposeNameFixes},
 	{regexp.MustCompile(`(?is)^!{1,2}gt(?:\s+(.*))?$`), (*Bot).nominateAll},
 	{regexp.MustCompile(`(?is)^!!(?:yes|y|no|n|clear|c)(?:$|[\s!.,;:\-\x{2014}\x{2013}].*)$`), (*Bot).vote},
 	{regexp.MustCompile(`(?is)^!final(?:\s+(.*))?$`), (*Bot).final},
@@ -96,6 +105,9 @@ var routes = []route{
 
 func (b *Bot) Handle(ctx context.Context, msg Message) error {
 	if err := b.FinalizeDue(ctx, b.config.Now()); err != nil {
+		return err
+	}
+	if err := b.ExpireNameFixes(ctx, b.config.Now()); err != nil {
 		return err
 	}
 	from, ok := b.member(msg.Sender)

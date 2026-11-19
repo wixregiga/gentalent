@@ -3,6 +3,7 @@ package chat_test
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 
 	"gentalent/internal/nominations/domain"
@@ -15,6 +16,8 @@ type fakePorts struct {
 	settings    domain.Settings
 	nominations []domain.Nomination
 	shames      []domain.Shame
+	spellings   map[domain.Spelling]domain.PersonID
+	nameFixes   []domain.NameFix
 	handled     map[string]bool
 	outbox      []port.Reply
 	relayed     map[string]bool
@@ -28,7 +31,7 @@ func newFakePorts(t *testing.T, members []domain.MemberID, settings domain.Setti
 
 func (f *fakePorts) group() *domain.Group {
 	f.t.Helper()
-	group, err := domain.NewGroup("group-test", f.members, f.settings, f.nominations, f.shames)
+	group, err := domain.NewGroup("group-test", f.members, f.settings, f.nominations, f.shames, f.spellings, f.nameFixes)
 	if err != nil {
 		f.t.Fatalf("load the Group: %v", err)
 	}
@@ -65,7 +68,7 @@ func (f *fakePorts) Apply(_ context.Context, messageID string, change port.Chang
 		return err
 	}
 	f.claim(messageID)
-	f.nominations, f.shames = group.Nominations(), group.Shames()
+	f.nominations, f.shames, f.spellings, f.nameFixes = group.Nominations(), group.Shames(), group.Spellings(), group.NameFixes()
 	f.queue(replies)
 	return nil
 }
@@ -149,14 +152,20 @@ func (f *fakePorts) Standing(context.Context) (port.Standing, error) {
 }
 
 func (f *fakePorts) Names(context.Context) ([]port.Name, error) {
-	var names []port.Name
-	seen := map[domain.PersonID]bool{}
-	for i := len(f.nominations) - 1; i >= 0; i-- {
-		person := f.nominations[i].Person
-		if !seen[person.ID] {
-			seen[person.ID] = true
-			names = append(names, port.Name{Alias: string(person.ID), Person: person.ID, Display: person.Name, Open: f.nominations[i].Open()})
-		}
+	latest := map[domain.PersonID]domain.Nomination{}
+	for _, nomination := range f.nominations {
+		latest[nomination.Person.ID] = nomination
 	}
+	names := make([]port.Name, 0, len(f.spellings))
+	for spelling, person := range f.spellings {
+		nomination := latest[person]
+		names = append(names, port.Name{Alias: string(spelling), Person: person, Display: nomination.Person.Name, Open: nomination.Open()})
+	}
+	slices.SortFunc(names, func(a, b port.Name) int {
+		if order := int(latest[b.Person].Number - latest[a.Person].Number); order != 0 {
+			return order
+		}
+		return strings.Compare(a.Alias, b.Alias)
+	})
 	return names, nil
 }

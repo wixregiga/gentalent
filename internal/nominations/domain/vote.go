@@ -65,7 +65,8 @@ func (g *Group) CastVote(by MemberID, ballots []Ballot, at time.Time) ([]VoteOut
 		outcome.ByCloseSpelling = byCloseSpelling(ballot.Nomination)
 		outcomes = append(outcomes, outcome)
 	}
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes()); err != nil {
+	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}
 	*g = *next
@@ -94,7 +95,8 @@ func (g *Group) CountReactions(number NominationNumber, reactions map[MemberID]V
 		}
 		outcomes = append(outcomes, next.vote(i, member.ID, after, at))
 	}
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes()); err != nil {
+	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}
 	*g = *next

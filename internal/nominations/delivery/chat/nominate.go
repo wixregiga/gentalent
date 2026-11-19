@@ -52,7 +52,10 @@ func (b *Bot) nominateAll(ctx context.Context, from Member, msg Message, match [
 			return b.list(ctx, from, msg, []string{"", strings.TrimSpace(tail)})
 		}
 	}
-	candidates, typed, problem := b.candidates(parts)
+	candidates, typed, problem, err := b.candidates(parts)
+	if err != nil {
+		return err
+	}
 	if problem != "" {
 		return b.say(ctx, msg, problem)
 	}
@@ -71,7 +74,10 @@ func (b *Bot) nominateAll(ctx context.Context, from Member, msg Message, match [
 }
 
 func (b *Bot) renominateAll(ctx context.Context, from Member, msg Message, match []string) error {
-	candidates, typed, problem := b.candidates(segments(renominationStart, strings.TrimSpace(msg.Text)))
+	candidates, typed, problem, err := b.candidates(segments(renominationStart, strings.TrimSpace(msg.Text)))
+	if err != nil {
+		return err
+	}
 	if problem != "" {
 		return b.say(ctx, msg, problem)
 	}
@@ -85,23 +91,27 @@ func (b *Bot) renominateAll(ctx context.Context, from Member, msg Message, match
 	}))
 }
 
-func (b *Bot) candidates(parts []segment) ([]domain.Candidate, map[domain.PersonID]string, string) {
+func (b *Bot) candidates(parts []segment) ([]domain.Candidate, map[domain.PersonID]string, string, error) {
 	candidates := make([]domain.Candidate, 0, len(parts))
 	typed := map[domain.PersonID]string{}
 	for _, part := range parts {
 		raw, pitch := splitNameAndPitch(part.body)
 		name := formatName(raw)
-		key := personKey(name)
-		if name == "" || key == "" {
-			return nil, nil, fmt.Sprintf("Include a nominee name after %s, e.g. %s Ada Lovelace. Why they're a generational talent.", part.keyword, part.keyword)
+		spelling := spellingOf(name)
+		if name == "" || spelling == "" {
+			return nil, nil, fmt.Sprintf("Include a nominee name after %s, e.g. %s Ada Lovelace. Why they're a generational talent.", part.keyword, part.keyword), nil
 		}
 		if utf8.RuneCountInString(name) > nameLimit {
-			return nil, nil, fmt.Sprintf("Put a period after the nominee's name, e.g. %s Ada Lovelace. Why they're a generational talent.", part.keyword)
+			return nil, nil, fmt.Sprintf("Put a period after the nominee's name, e.g. %s Ada Lovelace. Why they're a generational talent.", part.keyword), nil
 		}
-		typed[key] = name
-		candidates = append(candidates, domain.Candidate{Person: key, Name: name, Pitch: pitch, WithPhotos: strings.HasPrefix(part.keyword, "!!")})
+		person, err := b.config.NewPersonID()
+		if err != nil {
+			return nil, nil, "", err
+		}
+		typed[person] = name
+		candidates = append(candidates, domain.Candidate{Spelling: spelling, NewPerson: person, Name: name, Pitch: pitch, WithPhotos: strings.HasPrefix(part.keyword, "!!")})
 	}
-	return candidates, typed, ""
+	return candidates, typed, "", nil
 }
 
 func (w wording) announcement(number domain.NominationNumber, from Member, msg Message, verb string) port.Reply {

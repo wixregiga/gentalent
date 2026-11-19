@@ -2,11 +2,13 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
 type Candidate struct {
-	Person     PersonID
+	Spelling   Spelling
+	NewPerson  PersonID
 	Name       string
 	Pitch      string
 	WithPhotos bool
@@ -22,15 +24,16 @@ func (g *Group) Nominate(by MemberID, candidates []Candidate, at time.Time) ([]N
 	if err := next.requireMember(by); err != nil {
 		return nil, err
 	}
-	if err := namedOnce(candidates); err != nil {
+	people, err := next.people(candidates)
+	if err != nil {
 		return nil, err
 	}
 	nominated := make([]NominateOutcome, len(candidates))
 	var fresh []int
 	for k, candidate := range candidates {
-		i, open := next.openIndexOf(candidate.Person)
+		i, open := next.openIndexOf(people[k])
 		if !open {
-			if err := next.AssertRenominatedOnlyThroughRenomination(candidate.Person); err != nil {
+			if err := next.AssertRenominatedOnlyThroughRenomination(people[k]); err != nil {
 				return nil, err
 			}
 			fresh = append(fresh, k)
@@ -66,9 +69,11 @@ func (g *Group) Nominate(by MemberID, candidates []Candidate, at time.Time) ([]N
 	}
 	for _, k := range fresh {
 		candidate := candidates[k]
-		nominated[k] = NominateOutcome{Number: next.openNomination(by, Person{ID: candidate.Person, Name: candidate.Name}, candidate, at).Number}
+		next.spellings[candidate.Spelling] = people[k]
+		nominated[k] = NominateOutcome{Number: next.openNomination(by, Person{ID: people[k], Name: candidate.Name}, candidate, at).Number}
 	}
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes()); err != nil {
+	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}
 	*g = *next
@@ -83,11 +88,12 @@ func (g *Group) Renominate(by MemberID, candidates []Candidate, at time.Time) ([
 	if err := next.AssertRenominatedOnlyWhenGroupAllows(); err != nil {
 		return nil, err
 	}
-	if err := namedOnce(candidates); err != nil {
+	people, err := next.people(candidates)
+	if err != nil {
 		return nil, err
 	}
-	for _, candidate := range candidates {
-		if err := next.AssertRenominatedOnlyWhenRejected(candidate.Person); err != nil {
+	for _, person := range people {
+		if err := next.AssertRenominatedOnlyWhenRejected(person); err != nil {
 			return nil, err
 		}
 	}
@@ -101,11 +107,13 @@ func (g *Group) Renominate(by MemberID, candidates []Candidate, at time.Time) ([
 		return nil, err
 	}
 	renominated := make([]Nomination, 0, len(candidates))
-	for _, candidate := range candidates {
-		i, _ := next.latestOf(candidate.Person)
+	for k, candidate := range candidates {
+		i, _ := next.latestOf(people[k])
+		next.spellings[candidate.Spelling] = people[k]
 		renominated = append(renominated, next.openNomination(by, next.nominations[i].Person, candidate, at))
 	}
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes()); err != nil {
+	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}
 	*g = *next
@@ -205,13 +213,26 @@ func (g *Group) openIndexOf(person PersonID) (int, bool) {
 	return i, ok && g.nominations[i].Open()
 }
 
-func namedOnce(candidates []Candidate) error {
+func (g *Group) people(candidates []Candidate) ([]PersonID, error) {
+	people := make([]PersonID, len(candidates))
+	unknown := map[Spelling]PersonID{}
 	seen := map[PersonID]bool{}
-	for _, candidate := range candidates {
-		if seen[candidate.Person] {
-			return Refusal{Rule: OneOpenNominationPerPerson, Ref: Ref{Person: candidate.Person}}
+	for k, candidate := range candidates {
+		person, known := g.spellings[candidate.Spelling]
+		if !known {
+			if person, known = unknown[candidate.Spelling]; !known {
+				person = candidate.NewPerson
+				unknown[candidate.Spelling] = person
+			}
 		}
-		seen[candidate.Person] = true
+		if person == "" {
+			return nil, fmt.Errorf("candidate %q has no Person", candidate.Name)
+		}
+		if seen[person] {
+			return nil, Refusal{Rule: OneOpenNominationPerPerson, Ref: Ref{Person: person}}
+		}
+		seen[person] = true
+		people[k] = person
 	}
-	return nil
+	return people, nil
 }

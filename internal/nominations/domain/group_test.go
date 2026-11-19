@@ -33,11 +33,23 @@ var (
 
 func newGroup(t *testing.T, settings domain.Settings, history ...domain.Nomination) *domain.Group {
 	t.Helper()
-	group, err := domain.NewGroup("group-test", memberIDs, settings, history, nil)
+	group, err := loaded(settings, history...)
 	if err != nil {
 		t.Fatalf("NewGroup: %v", err)
 	}
 	return group
+}
+
+func spellingsOf(history []domain.Nomination) map[domain.Spelling]domain.PersonID {
+	spellings := map[domain.Spelling]domain.PersonID{}
+	for _, nomination := range history {
+		spellings[domain.Spelling(nomination.Person.ID)] = nomination.Person.ID
+	}
+	return spellings
+}
+
+func loaded(settings domain.Settings, history ...domain.Nomination) (*domain.Group, error) {
+	return domain.NewGroup("group-test", memberIDs, settings, history, nil, spellingsOf(history), nil)
 }
 
 func open(number domain.NominationNumber, person domain.Person, nominator member) domain.Nomination {
@@ -70,7 +82,7 @@ func finalized(number domain.NominationNumber, person domain.Person, status doma
 func candidates(people ...domain.Person) []domain.Candidate {
 	list := make([]domain.Candidate, 0, len(people))
 	for _, person := range people {
-		list = append(list, domain.Candidate{Person: person.ID, Name: person.Name, Pitch: "A pitch for " + person.Name})
+		list = append(list, domain.Candidate{Spelling: domain.Spelling(person.ID), NewPerson: person.ID, Name: person.Name, Pitch: "A pitch for " + person.Name})
 	}
 	return list
 }
@@ -120,8 +132,8 @@ func nomination(t *testing.T, group *domain.Group, number domain.NominationNumbe
 }
 
 func TestNominationLimitNotLessThanOne(t *testing.T) {
-	valid := domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 1}
-	if _, err := domain.NewGroup("group-test", memberIDs, valid, nil, nil); err != nil {
+	valid := domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 1, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}
+	if _, err := loaded(valid); err != nil {
 		t.Fatalf("limits of one must be accepted: %v", err)
 	}
 	cases := []struct {
@@ -138,7 +150,7 @@ func TestNominationLimitNotLessThanOne(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			settings := valid
 			c.change(&settings)
-			group, err := domain.NewGroup("group-test", memberIDs, settings, []domain.Nomination{open(1, ada, alex)}, nil)
+			group, err := loaded(settings, open(1, ada, alex))
 			var below domain.LimitBelowOne
 			if !errors.As(err, &below) {
 				t.Fatalf("want LimitBelowOne, got group %v and error %v", group, err)
@@ -151,7 +163,7 @@ func TestNominationLimitNotLessThanOne(t *testing.T) {
 }
 
 func TestOneOpenNominationPerPerson(t *testing.T) {
-	settings := domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3}
+	settings := domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}
 	group := newGroup(t, settings, open(1, ada, alex))
 	before := snapshot(group)
 
@@ -167,13 +179,13 @@ func TestOneOpenNominationPerPerson(t *testing.T) {
 	}
 	wantUnchanged(t, group, before)
 
-	_, err = domain.NewGroup("group-test", memberIDs, settings, []domain.Nomination{open(1, ada, alex), open(2, ada, blair)}, nil)
+	_, err = loaded(settings, open(1, ada, alex), open(2, ada, blair))
 	refused = refusal(t, err, domain.OneOpenNominationPerPerson)
 	wantNumbers(t, refused.Numbers, 1, 2)
 }
 
 func TestOpenNominationsWithinGroupLimit(t *testing.T) {
-	settings := domain.Settings{GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3, AllowRenomination: true}
+	settings := domain.Settings{GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3, AllowRenomination: true, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}
 	group := newGroup(t, settings, finalized(1, dorothy, domain.Rejected), open(2, ada, blair), open(3, grace, casey))
 	before := snapshot(group)
 
@@ -203,7 +215,7 @@ func TestOpenNominationsWithinGroupLimit(t *testing.T) {
 
 func TestLoweringTheGroupLimitRefusesOnlyNewNominations(t *testing.T) {
 	history := []domain.Nomination{open(1, ada, blair), open(2, grace, casey)}
-	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}, history...)
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}, history...)
 
 	_, err := group.Nominate(alex.ID, candidates(katherine), today)
 	refusal(t, err, domain.OpenNominationsWithinGroupLimit)
@@ -217,7 +229,7 @@ func TestLoweringTheGroupLimitRefusesOnlyNewNominations(t *testing.T) {
 }
 
 func TestOpenNominationsWithinMemberLimit(t *testing.T) {
-	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}, open(1, ada, alex))
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}, open(1, ada, alex))
 	before := snapshot(group)
 
 	_, err := group.Nominate(alex.ID, candidates(grace), today)
@@ -239,7 +251,7 @@ func TestOpenNominationsWithinMemberLimit(t *testing.T) {
 }
 
 func TestNominationsPerMessageWithinLimit(t *testing.T) {
-	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 2})
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 2, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour})
 	before := snapshot(group)
 
 	_, err := group.Nominate(alex.ID, candidates(ada, grace, katherine), today)
@@ -264,7 +276,7 @@ func TestNominationsPerMessageWithinLimit(t *testing.T) {
 }
 
 func TestMessageNominatesAllOrNone(t *testing.T) {
-	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3}, open(1, ada, blair))
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 3, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}, open(1, ada, blair))
 	before := snapshot(group)
 	_, err := group.Nominate(alex.ID, candidates(grace, katherine, dorothy), today)
 	refused := refusal(t, err, domain.MessageNominatesAllOrNone)
@@ -273,7 +285,7 @@ func TestMessageNominatesAllOrNone(t *testing.T) {
 	}
 	wantUnchanged(t, group, before)
 
-	group = newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 2, SingleMessageNominationLimit: 3})
+	group = newGroup(t, domain.Settings{GroupOpenNominationLimit: 3, MemberOpenNominationLimit: 2, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour})
 	before = snapshot(group)
 	_, err = group.Nominate(alex.ID, candidates(grace, katherine, dorothy), today)
 	refused = refusal(t, err, domain.MessageNominatesAllOrNone)
@@ -284,7 +296,7 @@ func TestMessageNominatesAllOrNone(t *testing.T) {
 }
 
 func TestVoteNamesItsNomination(t *testing.T) {
-	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}, open(1, ada, alex), open(2, grace, casey))
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}, open(1, ada, alex), open(2, grace, casey))
 	before := snapshot(group)
 
 	_, err := group.CastVote(blair.ID, []domain.Ballot{{Vote: domain.Yes}}, today)
@@ -311,7 +323,7 @@ func TestVoteNamesItsNomination(t *testing.T) {
 }
 
 func TestUnnamedVoteCountsWithOneOpenNomination(t *testing.T) {
-	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}, open(1, ada, alex))
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}, open(1, ada, alex))
 
 	if _, err := group.CastVote(blair.ID, []domain.Ballot{{Vote: domain.Yes}}, today); err != nil {
 		t.Fatalf("with one open Nomination a vote needs no name: %v", err)
@@ -322,7 +334,7 @@ func TestUnnamedVoteCountsWithOneOpenNomination(t *testing.T) {
 }
 
 func TestRenominatedOnlyThroughRenomination(t *testing.T) {
-	settings := domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}
+	settings := domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}
 	group := newGroup(t, settings, finalized(1, ada, domain.Rejected))
 	before := snapshot(group)
 
@@ -350,7 +362,7 @@ func TestRenominatedOnlyThroughRenomination(t *testing.T) {
 		t.Fatal("a rejected Person in a Group that allows renomination must be offered it")
 	}
 
-	renominated, err := group.Renominate(blair.ID, []domain.Candidate{{Person: ada.ID, Name: "ADA LOVELACE", Pitch: "Engines"}}, today)
+	renominated, err := group.Renominate(blair.ID, []domain.Candidate{{Spelling: domain.Spelling(ada.ID), NewPerson: ada.ID, Name: "ADA LOVELACE", Pitch: "Engines"}}, today)
 	if err != nil {
 		t.Fatalf("renomination must open a Nomination: %v", err)
 	}
@@ -361,7 +373,7 @@ func TestRenominatedOnlyThroughRenomination(t *testing.T) {
 }
 
 func TestRenominatedOnlyWhenRejected(t *testing.T) {
-	settings := domain.Settings{GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 2, SingleMessageNominationLimit: 3, AllowRenomination: true}
+	settings := domain.Settings{GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 2, SingleMessageNominationLimit: 3, AllowRenomination: true, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}
 	group := newGroup(t, settings, open(1, ada, alex), finalized(2, grace, domain.Certified))
 	before := snapshot(group)
 
@@ -384,7 +396,7 @@ func TestRenominatedOnlyWhenRejected(t *testing.T) {
 }
 
 func TestRenominatedOnlyWhenGroupAllows(t *testing.T) {
-	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}, finalized(1, ada, domain.Rejected))
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}, finalized(1, ada, domain.Rejected))
 	before := snapshot(group)
 
 	_, err := group.Renominate(blair.ID, candidates(ada), today)
@@ -393,7 +405,7 @@ func TestRenominatedOnlyWhenGroupAllows(t *testing.T) {
 }
 
 func TestNominationNumbersContinueAfterTheHighest(t *testing.T) {
-	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3},
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour},
 		finalized(5, ada, domain.Rejected), finalized(9, grace, domain.Certified))
 
 	if _, err := group.Nominate(alex.ID, candidates(ada), today); err == nil {
@@ -409,7 +421,7 @@ func TestNominationNumbersContinueAfterTheHighest(t *testing.T) {
 }
 
 func TestGettersReturnCopiesTheCallerCannotChange(t *testing.T) {
-	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3}, open(1, ada, alex))
+	group := newGroup(t, domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}, open(1, ada, alex))
 
 	got := nomination(t, group, 1)
 	got.Votes[blair.ID] = domain.No

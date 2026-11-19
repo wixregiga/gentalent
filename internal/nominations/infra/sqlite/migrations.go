@@ -14,5 +14,14 @@ func Migrations() []func(context.Context, *sql.Tx) error {
 			}
 			return nil
 		},
+		func(ctx context.Context, tx *sql.Tx) error {
+			if err := giveEveryPersonAnOpaqueID(ctx, tx); err != nil {
+				return fmt.Errorf("give every Person an opaque ID: %w", err)
+			}
+			if _, err := tx.ExecContext(ctx, nameFixSchema); err != nil {
+				return fmt.Errorf("create the name fix schema: %w", err)
+			}
+			return nil
+		},
 	}
 }

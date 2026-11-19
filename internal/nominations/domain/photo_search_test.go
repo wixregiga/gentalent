@@ -7,7 +7,7 @@ import (
 )
 
 func withPhotos(person domain.Person) []domain.Candidate {
-	return []domain.Candidate{{Person: person.ID, Name: person.Name, Pitch: "A pitch for " + person.Name, WithPhotos: true}}
+	return []domain.Candidate{{Spelling: domain.Spelling(person.ID), NewPerson: person.ID, Name: person.Name, Pitch: "A pitch for " + person.Name, WithPhotos: true}}
 }
 
 func TestPhotosSearchedAtMostOncePerNomination(t *testing.T) {
@@ -90,7 +90,7 @@ func TestExhibitsKeepAtMost2000Characters(t *testing.T) {
 	for i := range long {
 		long[i] = 'é'
 	}
-	if _, err := group.Nominate(alex.ID, []domain.Candidate{{Person: ada.ID, Name: ada.Name, Pitch: string(long)}}, today); err != nil {
+	if _, err := group.Nominate(alex.ID, []domain.Candidate{{Spelling: domain.Spelling(ada.ID), NewPerson: ada.ID, Name: ada.Name, Pitch: string(long)}}, today); err != nil {
 		t.Fatal(err)
 	}
 	if got := []rune(nomination(t, group, 1).Exhibits[0]); len(got) != 2000 {

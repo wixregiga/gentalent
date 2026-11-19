@@ -31,6 +31,9 @@
   "member_open_nomination_limit": 1,
   "single_message_nomination_limit": 3,
   "allow_renomination": false,
+  "allow_name_fixes": false,
+  "name_fix_agreement_percent": 100,
+  "name_fix_hours": 24,
   "photo_search_workers": 3,
   "ai_providers": [
     {"cli": "codex", "model": "gpt-6.1-sol"},

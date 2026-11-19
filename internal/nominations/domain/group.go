@@ -3,7 +3,9 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
+	"time"
 )
 
 type GroupID string
@@ -14,21 +16,46 @@ type Group struct {
 	settings    Settings
 	nominations []Nomination
 	shames      []Shame
+	spellings   map[Spelling]PersonID
+	nameFixes   []NameFix
 }
 
-func NewGroup(id GroupID, members []MemberID, settings Settings, nominations []Nomination, shames []Shame) (*Group, error) {
+func NewGroup(id GroupID, members []MemberID, settings Settings, nominations []Nomination, shames []Shame,
+	spellings map[Spelling]PersonID, nameFixes []NameFix) (*Group, error) {
 	group := &Group{
 		id:          id,
 		members:     roster(members),
 		settings:    settings,
 		nominations: cloneAll(nominations),
 		shames:      slices.Clone(shames),
+		spellings:   maps.Clone(spellings),
+		nameFixes:   cloneFixes(nameFixes),
+	}
+	if group.spellings == nil {
+		group.spellings = map[Spelling]PersonID{}
 	}
 	slices.SortFunc(group.nominations, func(a, b Nomination) int { return int(a.Number - b.Number) })
-	if err := errors.Join(group.EnsureNominationLimitNotLessThanOne(), group.EnsureOneOpenNominationPerPerson(), group.EnsureCertifiedByUnanimousYes()); err != nil {
+	slices.SortFunc(group.nameFixes, func(a, b NameFix) int { return int(a.Number - b.Number) })
+	if err := errors.Join(group.EnsureNominationLimitNotLessThanOne(), group.EnsureOneOpenNominationPerPerson(), group.EnsureCertifiedByUnanimousYes(),
+		group.EnsureOnePendingNameFixPerPerson(), group.EnsureNameFixAgreementPercentageWithinRange(), group.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}
 	return group, nil
+}
+
+func (g *Group) Spellings() map[Spelling]PersonID {
+	return maps.Clone(g.spellings)
+}
+
+func (g *Group) NameFixes() []NameFix {
+	return cloneFixes(g.nameFixes)
+}
+
+func (g *Group) NameFix(number NameFixNumber) (NameFix, bool) {
+	if i, ok := g.fixIndex(number); ok {
+		return g.nameFixes[i].clone(), true
+	}
+	return NameFix{}, false
 }
 
 func (g *Group) ID() GroupID {
@@ -102,6 +129,34 @@ func (g *Group) EnsureOneOpenNominationPerPerson() error {
 	return nil
 }
 
+func (g *Group) EnsureOnePendingNameFixPerPerson() error {
+	pending := map[PersonID]NameFixNumber{}
+	for _, fix := range g.nameFixes {
+		if !fix.Pending() {
+			continue
+		}
+		if first, twice := pending[fix.Person]; twice {
+			return Refusal{Rule: OnePendingNameFixPerPerson, Fix: first}
+		}
+		pending[fix.Person] = fix.Number
+	}
+	return nil
+}
+
+func (g *Group) EnsureNameFixAgreementPercentageWithinRange() error {
+	if percentage := g.settings.NameFixAgreementPercentage; percentage <= 0 || percentage > 100 {
+		return AgreementPercentageOutOfRange{Value: percentage}
+	}
+	return nil
+}
+
+func (g *Group) EnsureNameFixWindowAtLeastOneHour() error {
+	if g.settings.NameFixWindow < time.Hour {
+		return NameFixWindowBelowAnHour{Value: g.settings.NameFixWindow}
+	}
+	return nil
+}
+
 func (g *Group) EnsureCertifiedByUnanimousYes() error {
 	for _, nomination := range g.nominations {
 		noes := nomination.Count(No)
@@ -116,6 +171,8 @@ func (g *Group) clone() *Group {
 	copied := *g
 	copied.nominations = cloneAll(g.nominations)
 	copied.shames = slices.Clone(g.shames)
+	copied.spellings = maps.Clone(g.spellings)
+	copied.nameFixes = cloneFixes(g.nameFixes)
 	return &copied
 }
 

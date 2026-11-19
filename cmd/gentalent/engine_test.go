@@ -40,6 +40,7 @@ func testConfig(t *testing.T) config {
 		MediaDir:            filepath.Join(dir, "media"),
 		PollSeconds:         1, PhotoLayout: "individual", PhotoSearchWorkers: 2,
 		GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3,
+		NameFixAgreementPercent: 100, NameFixHours: 24,
 	}
 }
 

@@ -93,9 +93,11 @@ running, and `backup --live --label NAME` copies both databases into `backups/` 
 The bot keeps two databases, `nominations_database` and `messaging_database` in
 `config.json` (default `.state/nominations.sqlite3` and `.state/messaging.sqlite3`). It also
 reads `group_open_nomination_limit` and `member_open_nomination_limit` (default 1),
-`single_message_nomination_limit` (3), `allow_renomination` (false) and
-`photo_search_workers` (3, the photo searches it runs at once); a limit below one refuses
-to start. `mise run test` runs the Go suite and the deploy script checks.
+`single_message_nomination_limit` (3), `allow_renomination` (false),
+`allow_name_fixes` (false), `name_fix_agreement_percent` (100, the share of Members whose
+agreement fixes a name), `name_fix_hours` (24, how long a proposed fix waits before it
+lapses) and `photo_search_workers` (3, the photo searches it runs at once); a limit below
+one, a percentage outside 1 to 100 or a window under an hour refuses to start. `mise run test` runs the Go suite and the deploy script checks.
 
 Changes happen in T3 Code worktree threads and ship from the main checkout with
 `mise run ship <branch>`. Commits and pushes are scanned for personal data and secrets

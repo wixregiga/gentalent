@@ -14,7 +14,8 @@ func (g *Group) ClaimPhotoSearches() ([]Nomination, error) {
 			claimed = append(claimed, nomination.clone())
 		}
 	}
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes()); err != nil {
+	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}
 	*g = *next
@@ -30,7 +31,8 @@ func (g *Group) AttachPhotos(number NominationNumber, strip, exhibit string) (No
 	nomination.Photos = PhotosFound
 	nomination.Strip = strip
 	nomination.exhibit(exhibit)
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes()); err != nil {
+	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return Nomination{}, err
 	}
 	*g = *next
@@ -44,7 +46,8 @@ func (g *Group) FailPhotoSearch(number NominationNumber) (Nomination, error) {
 	}
 	nomination := &next.nominations[i]
 	nomination.Photos = PhotosFailed
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes()); err != nil {
+	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return Nomination{}, err
 	}
 	*g = *next
@@ -60,7 +63,8 @@ func (g *Group) AbandonInterruptedSearches() ([]Nomination, error) {
 			abandoned = append(abandoned, nomination.clone())
 		}
 	}
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes()); err != nil {
+	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}
 	*g = *next

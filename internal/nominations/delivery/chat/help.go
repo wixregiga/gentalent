@@ -13,7 +13,10 @@ const (
 func (b *Bot) help(ctx context.Context, from Member, msg Message, match []string) error {
 	members := len(b.config.Members)
 	rule := "Any NO denies forever."
-	renominate := ""
+	renominate, fix := "", ""
+	if b.config.Settings.AllowNameFixes {
+		fix = "Fix a misspelled name: !gtfix 12 Ada Lovelace · agree !gtfixyes 3 · stop !gtfixno 3"
+	}
 	if b.config.Settings.AllowRenomination {
 		rule = "Any NO rejects."
 		renominate = "Renominate the rejected: !gtrenominate Name. Pitch"
@@ -30,6 +33,7 @@ func (b *Bot) help(ctx context.Context, from Member, msg Message, match []string
 			voteKeys,
 			"Name a Nomination by number or name: !!Y 12 · !!N 12-14 · !!Y Ada Lovelace",
 			renominate,
+			fix,
 			"Finish early: !final (nominator) · !final 12",
 			"Status: !gtstatus",
 			"Lists: !gtlist · !gtlist losers",
