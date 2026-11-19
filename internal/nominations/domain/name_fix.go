@@ -169,6 +169,9 @@ func (g *Group) StopNameFix(by MemberID, number NameFixNumber, at time.Time) (Na
 	case next.outOfReach(*fix):
 		fix.Status, fix.EndedAt = NameFixStopped, at
 	}
+	if err := next.AssertNameFixWithdrawnByItsProposer(*fix, by); err != nil {
+		return NameFix{}, err
+	}
 	if err := next.AssertNameFixStoppedWhenAgreementIsOutOfReach(*fix); err != nil {
 		return NameFix{}, err
 	}
@@ -237,6 +240,13 @@ func (g *Group) AssertEarlierSpellingsStillNameThePerson(earlier map[Spelling]Pe
 		if named == person && g.spellings[spelling] != person {
 			return Refusal{Rule: EarlierSpellingsStillNameThePerson, Ref: Ref{Person: person}}
 		}
+	}
+	return nil
+}
+
+func (g *Group) AssertNameFixWithdrawnByItsProposer(fix NameFix, by MemberID) error {
+	if by == fix.Proposer && fix.Status != NameFixWithdrawn {
+		return Refusal{Rule: NameFixWithdrawnByItsProposer, Fix: fix.Number}
 	}
 	return nil
 }

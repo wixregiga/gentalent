@@ -314,3 +314,18 @@ func TestNameFixRefusesWhatChangesNothing(t *testing.T) {
 	_, err = group.AgreeToNameFix(alex.ID, 9, today)
 	refusal(t, err, domain.UnknownNameFix)
 }
+
+func TestNameFixWithdrawnByItsProposer(t *testing.T) {
+	group := newGroup(t, fixing(50), open(1, misspelled, alex))
+	fix := propose(t, group, blair, proposal(1, "Ada Lovelace"))
+	if withdrawn, err := group.StopNameFix(blair.ID, fix.Number, today); err != nil || withdrawn.Status != domain.NameFixWithdrawn {
+		t.Fatalf("the proposer's no withdraws the fix even while agreement is in reach: %+v, %v", withdrawn, err)
+	}
+	_, err := group.AgreeToNameFix(casey.ID, fix.Number, today)
+	refusal(t, err, domain.NameFixOver)
+
+	fix = propose(t, group, casey, proposal(1, "Ada Lovelace"))
+	if stillPending, _ := group.StopNameFix(alex.ID, fix.Number, today); !stillPending.Pending() {
+		t.Fatalf("another Member's no is a no, not a withdrawal: %+v", stillPending)
+	}
+}

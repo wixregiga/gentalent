@@ -238,6 +238,14 @@ contexts:
             verified_by:
               - internal/nominations/domain/name_fix_test.go:TestNameFixedOnlyWhenGroupAllows
               - internal/nominations/delivery/chat/name_fix_test.go:TestNameFixRefusals
+          name-fix-withdrawn-by-its-proposer:
+            on: StopNameFix
+            statement: >-
+              The member that proposes a name fix can withdraw it with their own
+              no.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixWithdrawnByItsProposer
+              - internal/nominations/delivery/chat/name_fix_test.go:TestOneNoStopsAFixThatNeedsEveryMember
     value_objects:
       CertificationStatus:
         definition: >-
