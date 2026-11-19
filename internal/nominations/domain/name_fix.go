@@ -114,7 +114,7 @@ func (g *Group) ProposeNameFix(by MemberID, proposal NameFixProposal, at time.Ti
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return NameFix{}, err
 	}
-	agreed, err := next.AgreeToNameFix(by, fix.Number, at)
+	agreed, err := next.AgreeToNameFix(by, fix.Nomination, at)
 	if err != nil {
 		return NameFix{}, err
 	}
@@ -122,12 +122,12 @@ func (g *Group) ProposeNameFix(by MemberID, proposal NameFixProposal, at time.Ti
 	return agreed, nil
 }
 
-func (g *Group) AgreeToNameFix(by MemberID, number NameFixNumber, at time.Time) (NameFix, error) {
+func (g *Group) AgreeToNameFix(by MemberID, nomination NominationNumber, at time.Time) (NameFix, error) {
 	next := g.clone()
 	if err := next.requireMember(by); err != nil {
 		return NameFix{}, err
 	}
-	i, err := next.pendingFix(number)
+	i, err := next.pendingFixOn(nomination)
 	if err != nil {
 		return NameFix{}, err
 	}
@@ -153,12 +153,12 @@ func (g *Group) AgreeToNameFix(by MemberID, number NameFixNumber, at time.Time) 
 	return next.nameFixes[i].clone(), nil
 }
 
-func (g *Group) StopNameFix(by MemberID, number NameFixNumber, at time.Time) (NameFix, error) {
+func (g *Group) StopNameFix(by MemberID, nomination NominationNumber, at time.Time) (NameFix, error) {
 	next := g.clone()
 	if err := next.requireMember(by); err != nil {
 		return NameFix{}, err
 	}
-	i, err := next.pendingFix(number)
+	i, err := next.pendingFixOn(nomination)
 	if err != nil {
 		return NameFix{}, err
 	}
@@ -274,15 +274,6 @@ func (g *Group) NameFixWindow() time.Duration {
 	return g.settings.NameFixWindow
 }
 
-func (g *Group) PendingNameFixFor(person PersonID) (NameFix, bool) {
-	for _, fix := range g.nameFixes {
-		if fix.Person == person && fix.Pending() {
-			return fix.clone(), true
-		}
-	}
-	return NameFix{}, false
-}
-
 func (g *Group) agreed(fix NameFix) int {
 	count := 0
 	for _, member := range g.members {
@@ -320,15 +311,17 @@ func (g *Group) fixName(i int, at time.Time) {
 	}
 }
 
-func (g *Group) pendingFix(number NameFixNumber) (int, error) {
-	i, ok := g.fixIndex(number)
+func (g *Group) pendingFixOn(number NominationNumber) (int, error) {
+	k, ok := g.index(number)
 	if !ok {
-		return 0, Refusal{Rule: UnknownNameFix, Fix: number}
+		return 0, Refusal{Rule: UnknownNomination, Ref: Ref{Number: number}}
 	}
-	if !g.nameFixes[i].Pending() {
-		return 0, Refusal{Rule: NameFixOver, Fix: number}
+	for i, fix := range g.nameFixes {
+		if fix.Person == g.nominations[k].Person && fix.Pending() {
+			return i, nil
+		}
 	}
-	return i, nil
+	return 0, Refusal{Rule: NoPendingNameFix, Numbers: []NominationNumber{number}}
 }
 
 func (g *Group) fixIndex(number NameFixNumber) (int, bool) {

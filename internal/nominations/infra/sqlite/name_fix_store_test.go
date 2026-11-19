@@ -51,13 +51,13 @@ func TestANameFixIsKeptFromProposalToFixedName(t *testing.T) {
 		t.Fatalf("a proposed name fix reloads as proposed:\ngot  %+v\nwant %+v", got, proposed)
 	}
 	agreed := applyFix(t, store, "m3", func(g *domain.Group) (domain.NameFix, error) {
-		return g.AgreeToNameFix(blair, proposed.Number, today.Add(2*time.Minute))
+		return g.AgreeToNameFix(blair, proposed.Nomination, today.Add(2*time.Minute))
 	})
 	if got := reloadedFix(t, store, proposed.Number); !reflect.DeepEqual(got, agreed) || got.Count(domain.Yes) != 2 || !got.Pending() {
 		t.Fatalf("an answer to a pending name fix is kept:\ngot  %+v\nwant %+v", got, agreed)
 	}
 	fixed := applyFix(t, store, "m4", func(g *domain.Group) (domain.NameFix, error) {
-		return g.AgreeToNameFix(casey, proposed.Number, today.Add(3*time.Minute))
+		return g.AgreeToNameFix(casey, proposed.Nomination, today.Add(3*time.Minute))
 	})
 	if fixed.Status != domain.NameFixed {
 		t.Fatalf("the third yes fixes the name, got %+v", fixed)
@@ -102,11 +102,11 @@ func TestEndedNameFixesAreKeptWithoutChangingTheName(t *testing.T) {
 
 	first := propose("m2", alex, today)
 	stopped := applyFix(t, store, "m3", func(g *domain.Group) (domain.NameFix, error) {
-		return g.StopNameFix(blair, first.Number, today.Add(time.Minute))
+		return g.StopNameFix(blair, first.Nomination, today.Add(time.Minute))
 	})
 	second := propose("m4", blair, today.Add(2*time.Minute))
 	withdrawn := applyFix(t, store, "m5", func(g *domain.Group) (domain.NameFix, error) {
-		return g.StopNameFix(blair, second.Number, today.Add(3*time.Minute))
+		return g.StopNameFix(blair, second.Nomination, today.Add(3*time.Minute))
 	})
 	third := propose("m6", casey, today.Add(4*time.Minute))
 	var lapsed []domain.NameFix

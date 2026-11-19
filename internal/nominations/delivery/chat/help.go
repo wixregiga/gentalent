@@ -15,7 +15,7 @@ func (b *Bot) help(ctx context.Context, from Member, msg Message, match []string
 	rule := "Any NO denies forever."
 	renominate, fix := "", ""
 	if b.config.Settings.AllowNameFixes {
-		fix = "Fix a misspelled name: !gtfix 12 Ada Lovelace · agree !gtfixyes 3 · stop !gtfixno 3"
+		fix = "Fix a misspelled name: !gtfix 12 Ada Lovelace · agree !gtfixyes 12 · stop !gtfixno 12"
 	}
 	if b.config.Settings.AllowRenomination {
 		rule = "Any NO rejects."

@@ -38,9 +38,8 @@ const (
 	NameFixStoppedWhenAgreementIsOutOfReach Rule = "name-fix-stopped-when-agreement-is-out-of-reach"
 	NameFixLapsesAfterTheNameFixWindow      Rule = "name-fix-lapses-after-the-name-fix-window"
 	NameFixWithdrawnByItsProposer           Rule = "name-fix-withdrawn-by-its-proposer"
+	NoPendingNameFix                        Rule = "no-pending-name-fix"
 	NameUnchanged                           Rule = "name-unchanged"
-	UnknownNameFix                          Rule = "unknown-name-fix"
-	NameFixOver                             Rule = "name-fix-over"
 )
 
 type Refusal struct {

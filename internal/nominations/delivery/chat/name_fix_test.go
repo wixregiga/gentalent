@@ -15,24 +15,27 @@ func fixesAllowed(percentage int) domain.Settings {
 
 func TestAMisspelledNameIsFixedWhenEveryMemberAgrees(t *testing.T) {
 	h := newHarness(t, fixesAllowed(100))
-	h.send(alex, "!gt Ada Lovelase. Engines")
 	h.send(blair, "!gt Grace Hopper. Compilers")
+	h.send(alex, "!gt Ada Lovelase. Engines")
 
-	contains(t, h.say(casey, "!gtfix 1 Ada Lovelace"),
-		"Fix 1 for #1: Ada Lovelase → Ada Lovelace? Votes carry over.", "@Casey proposed it. It needs 3 of 3 Members.",
-		"Agree: !gtfixyes 1 · Stop: !gtfixno 1", "It lapses in 24 hours")
-	contains(t, h.say(alex, "!gtfixyes 1"), "Fix 1: @Alex agrees. 2 of 3 agree; it needs 3.")
-	if got := h.nominee(1); got != "Ada Lovelase" {
+	contains(t, h.say(casey, "!gtfix 2 Ada Lovelace"),
+		"Fix for #2: Ada Lovelase → Ada Lovelace? Votes carry over.", "@Casey proposed it. It needs 3 of 3 Members.",
+		"Agree: !gtfixyes 2 · Stop: !gtfixno 2", "It lapses in 24 hours")
+	contains(t, h.say(alex, "!gtfixyes 2"), "Fix for #2 (Ada Lovelase → Ada Lovelace): @Alex agrees. 2 of 3 agree; it needs 3.")
+	if got := h.nominee(2); got != "Ada Lovelase" {
 		t.Fatalf("two of three agreeing changed the name to %q", got)
 	}
-	contains(t, h.say(blair, "!gtfixyes 1"), "Name fixed for #1: Ada Lovelase → Ada Lovelace. Votes and history carried over.")
-	if got := h.nomination(1); h.nominee(1) != "Ada Lovelace" || got.Votes[alex.ID] != domain.Yes || len(got.Votes) != 1 {
+	contains(t, h.say(blair, "!gtfixyes 2"), "Name fixed for #2: Ada Lovelase → Ada Lovelace. Votes and history carried over.")
+	if got := h.nomination(2); h.nominee(2) != "Ada Lovelace" || got.Votes[alex.ID] != domain.Yes || len(got.Votes) != 1 {
 		t.Fatalf("after the fix: %+v", got)
 	}
+	if h.nominee(1) != "Grace Hopper" {
+		t.Fatalf("the fix renamed the other Nomination: %q", h.nominee(1))
+	}
 
-	contains(t, h.say(casey, "!!Y ada lovelase"), "Ada Lovelace (#1)")
-	contains(t, h.say(blair, "!!Y Ada Lovelace"), "Ada Lovelace (#1)")
-	if votes := h.nomination(1).Votes; votes[casey.ID] != domain.Yes || votes[blair.ID] != domain.Yes {
+	contains(t, h.say(casey, "!!Y ada lovelase"), "Ada Lovelace (#2)")
+	contains(t, h.say(blair, "!!Y Ada Lovelace"), "Ada Lovelace (#2)")
+	if votes := h.nomination(2).Votes; votes[casey.ID] != domain.Yes || votes[blair.ID] != domain.Yes {
 		t.Fatalf("votes by the old and new spellings: %+v", votes)
 	}
 }
@@ -56,20 +59,20 @@ func TestOneNoStopsAFixThatNeedsEveryMember(t *testing.T) {
 	h := newHarness(t, fixesAllowed(100))
 	h.send(alex, "!gt Ada Lovelase. Engines")
 	h.send(alex, "!gtfix 1 Ada Lovelace")
-	contains(t, h.say(blair, "!gtfixno 1"), "Fix 1 stopped. Ada Lovelase (#1) keeps that name.")
-	contains(t, h.say(casey, "!gtfixyes 1"), "Fix 1 is over: it was stopped.")
+	contains(t, h.say(blair, "!gtfixno 1"), "Fix for #1 stopped. Ada Lovelase (#1) keeps that name.")
+	contains(t, h.say(casey, "!gtfixyes 1"), "No fix is waiting for Ada Lovelase (#1). Propose one: !gtfix 1 Correct Name")
 	if got := h.nominee(1); got != "Ada Lovelase" {
 		t.Fatalf("a stopped fix changed the name to %q", got)
 	}
-	contains(t, h.say(blair, "!gtfix 1 Ada Lovelace"), "Fix 2 for #1")
-	contains(t, h.say(blair, "!gtfixno 2"), "Fix 2 withdrawn.")
+	contains(t, h.say(blair, "!gtfix 1 Ada Lovelace"), "Fix for #1: Ada Lovelase → Ada Lovelace?")
+	contains(t, h.say(blair, "!gtfixno 1"), "Fix for #1 withdrawn.")
 }
 
 func TestAFixNeedsOnlyTheConfiguredShareOfMembers(t *testing.T) {
 	h := newHarness(t, fixesAllowed(50))
 	h.send(alex, "!gt Ada Lovelase. Engines")
 	contains(t, h.say(alex, "!gtfix 1 Ada Lovelace"), "It needs 2 of 3 Members.")
-	contains(t, h.say(blair, "!gtfixno 1"), "Fix 1: @Blair says no. 1 of 3 agree; it needs 2.")
+	contains(t, h.say(blair, "!gtfixno 1"), "Fix for #1 (Ada Lovelase → Ada Lovelace): @Blair says no. 1 of 3 agree; it needs 2.")
 	contains(t, h.say(casey, "!gtfixyes 1"), "Name fixed for #1")
 }
 
@@ -80,12 +83,12 @@ func TestAnUnansweredFixLapsesAfterItsWindow(t *testing.T) {
 	h.now = h.now.Add(24 * time.Hour)
 	var lapsed bool
 	for _, reply := range h.send(blair, "!gtstatus") {
-		lapsed = lapsed || strings.Contains(reply.Text, "Fix 1 lapsed without enough agreement. Ada Lovelase (#1) keeps that name.")
+		lapsed = lapsed || strings.Contains(reply.Text, "The fix for #1 lapsed without enough agreement. Ada Lovelase (#1) keeps that name.")
 	}
 	if !lapsed {
 		t.Fatal("no lapse reply after the window ended")
 	}
-	contains(t, h.say(casey, "!gtfixyes 1"), "Fix 1 is over: it was lapsed.")
+	contains(t, h.say(casey, "!gtfixyes 1"), "No fix is waiting for Ada Lovelase (#1).")
 }
 
 func TestSeveralFixesInOneMessageAreAnsweredOneByOne(t *testing.T) {
@@ -96,8 +99,8 @@ func TestSeveralFixesInOneMessageAreAnsweredOneByOne(t *testing.T) {
 	if len(replies) != 3 {
 		t.Fatalf("want a reply per fix, got %+v", replies)
 	}
-	contains(t, replies[0].Text, "Fix 1 for #1")
-	contains(t, replies[1].Text, "Fix 2 for #2")
+	contains(t, replies[0].Text, "Fix for #1", "!gtfixyes 1")
+	contains(t, replies[1].Text, "Fix for #2", "!gtfixyes 2")
 	contains(t, replies[2].Text, "There is no Nomination 9.")
 }
 
@@ -129,14 +132,15 @@ func TestNameFixRefusals(t *testing.T) {
 	contains(t, h.say(casey, "!gtfix 1 Grace Hopper"), "That spelling already names Grace Hopper (#2). Pick a different spelling.")
 	contains(t, h.say(casey, "!gtfix 1 Ada Lovelase"), "Ada Lovelase (#1) is already spelled that way.")
 	contains(t, h.say(casey, "!gtfix Ada Lovelace"), "Fix a name: !gtfix 12 Ada Lovelace")
-	contains(t, h.say(casey, "!gtfixyes"), "Answer a fix by its number: !gtfixyes 3 or !gtfixno 3")
-	contains(t, h.say(casey, "!gtfixyes 7"), "There is no Fix 7.")
+	contains(t, h.say(casey, "!gtfixyes"), "Answer a fix by its Nomination's number: !gtfixyes 12 or !gtfixno 12")
+	contains(t, h.say(casey, "!gtfixyes 7"), "There is no Nomination 7.")
+	contains(t, h.say(casey, "!gtfixyes 2"), "No fix is waiting for Grace Hopper (#2).")
 
 	h.send(casey, "!gtfix 1 Ada Lovelace")
-	contains(t, h.say(blair, "!gtfix 1 Ada King"), "Fix 1 is already waiting for #1: Ada Lovelase → Ada Lovelace.", "Agree: !gtfixyes 1")
+	contains(t, h.say(blair, "!gtfix 1 Ada King"), "A fix is already waiting for #1: Ada Lovelase → Ada Lovelace.", "Agree: !gtfixyes 1")
 	h.send(alex, "!gtfixyes 1")
 	h.send(blair, "!gtfixyes 1")
-	contains(t, h.say(blair, "!gtfix 1 Ada King"), "Ada Lovelace (#1) already had their one name fix (Fix 1).")
+	contains(t, h.say(blair, "!gtfix 1 Ada King"), "Ada Lovelace (#1) already had their one name fix.")
 }
 
 func TestHelpShowsNameFixesOnlyWhenAllowed(t *testing.T) {
@@ -145,5 +149,24 @@ func TestHelpShowsNameFixesOnlyWhenAllowed(t *testing.T) {
 	off.AllowNameFixes = false
 	if help := newHarness(t, off).say(alex, "!gthelp"); strings.Contains(help, "!gtfix") {
 		t.Fatalf("help offers name fixes that are turned off:\n%s", help)
+	}
+}
+
+func TestAFixIsAnsweredByAnyNominationOfItsPerson(t *testing.T) {
+	h := newHarness(t, fixesAllowed(100))
+	h.send(alex, "!gt Ada Lovelase. Engines")
+	h.send(blair, "!!N")
+	h.send(casey, "!!N")
+	h.now = h.now.Add(2 * time.Minute)
+	h.send(alex, "!gtstatus")
+	if h.nomination(1).Status != domain.Rejected {
+		t.Fatalf("Nomination 1 is %s", h.nomination(1).Status)
+	}
+	h.send(blair, "!gtrenominate Ada Lovelase. Again")
+	contains(t, h.say(casey, "!gtfix 1 Ada Lovelace"), "Fix for #1: Ada Lovelase → Ada Lovelace?")
+	contains(t, h.say(alex, "!gtfixyes 2"), "Fix for #1 (Ada Lovelase → Ada Lovelace): @Alex agrees.")
+	contains(t, h.say(blair, "!gtfixyes 2"), "Name fixed for #1")
+	if h.nominee(1) != "Ada Lovelace" || h.nominee(2) != "Ada Lovelace" {
+		t.Fatalf("both Nominations of the Person show %q and %q", h.nominee(1), h.nominee(2))
 	}
 }

@@ -83,7 +83,7 @@ func (w wording) refusal(r domain.Refusal) (string, bool) {
 	case domain.NameFixedOnlyWhenGroupAllows:
 		return "Name fixes are turned off for this Group.", true
 	case domain.NameFixedOncePerPerson:
-		return fmt.Sprintf("%s already had their one name fix (Fix %d).", w.name(first), r.Fix), true
+		return w.name(first) + " already had their one name fix.", true
 	case domain.NameFixNeverTakesAnotherPersonsSpelling:
 		if len(r.Numbers) == 0 {
 			return "That spelling already names someone else. Pick a different spelling.", true
@@ -93,10 +93,8 @@ func (w wording) refusal(r domain.Refusal) (string, bool) {
 		return w.pendingNameFix(r.Fix), true
 	case domain.NameUnchanged:
 		return w.name(first) + " is already spelled that way.", true
-	case domain.UnknownNameFix:
-		return fmt.Sprintf("There is no Fix %d.", r.Fix), true
-	case domain.NameFixOver:
-		return w.endedNameFix(r.Fix), true
+	case domain.NoPendingNameFix:
+		return "No fix is waiting for " + w.name(first) + ". Propose one: !gtfix " + strconv.Itoa(int(first)) + " Correct Name", true
 	}
 	return "", false
 }
