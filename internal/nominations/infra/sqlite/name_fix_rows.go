@@ -10,41 +10,6 @@ import (
 	"gentalent/internal/nominations/domain"
 )
 
-func loadSpellings(ctx context.Context, tx *sql.Tx) (map[domain.Spelling]domain.PersonID, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT alias, person_id FROM aliases")
-	if err != nil {
-		return nil, fmt.Errorf("load spellings: %w", err)
-	}
-	defer rows.Close()
-	spellings := map[domain.Spelling]domain.PersonID{}
-	for rows.Next() {
-		var spelling domain.Spelling
-		var person domain.PersonID
-		if err := rows.Scan(&spelling, &person); err != nil {
-			return nil, fmt.Errorf("load spellings: %w", err)
-		}
-		spellings[spelling] = person
-	}
-	return spellings, rows.Err()
-}
-
-func saveSpellings(ctx context.Context, tx *sql.Tx, before, after map[domain.Spelling]domain.PersonID) error {
-	for _, spelling := range slices.Sorted(maps.Keys(after)) {
-		person := after[spelling]
-		was, known := before[spelling]
-		if known && was == person {
-			continue
-		}
-		if known {
-			return fmt.Errorf("the spelling %q names Person %s and cannot move to Person %s", spelling, was, person)
-		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO aliases(alias, person_id) VALUES(?, ?)", spelling, person); err != nil {
-			return fmt.Errorf("save the spelling %q: %w", spelling, err)
-		}
-	}
-	return nil
-}
-
 func loadNameFixes(ctx context.Context, tx *sql.Tx) ([]domain.NameFix, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT number, nomination, person_id, from_name, to_name, spelling, proposer, with_photos,
 		proposed_at, status, ended_at FROM name_fixes ORDER BY number`)

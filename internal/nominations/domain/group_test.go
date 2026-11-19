@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 	"time"
+	"unicode"
 
 	"gentalent/internal/nominations/domain"
 )
@@ -40,22 +41,51 @@ func newGroup(t *testing.T, settings domain.Settings, history ...domain.Nominati
 	return group
 }
 
-func spellingsOf(history []domain.Nomination) map[domain.Spelling]domain.PersonID {
-	spellings := map[domain.Spelling]domain.PersonID{}
-	for _, nomination := range history {
-		spellings[domain.Spelling(nomination.Person.ID)] = nomination.Person.ID
+var cast = map[domain.PersonID]domain.Person{}
+
+func spelling(name string) domain.Spelling {
+	var folded []rune
+	for _, r := range name {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) {
+			folded = append(folded, unicode.ToLower(r))
+		}
 	}
-	return spellings
+	return domain.Spelling(folded)
+}
+
+func personsOf(history []domain.Nomination) []domain.Person {
+	var persons []domain.Person
+	seen := map[domain.PersonID]bool{}
+	for _, nomination := range history {
+		if seen[nomination.Person] {
+			continue
+		}
+		seen[nomination.Person] = true
+		person := cast[nomination.Person]
+		person.Spellings = []domain.Spelling{spelling(person.Name)}
+		persons = append(persons, person)
+	}
+	return persons
 }
 
 func loaded(settings domain.Settings, history ...domain.Nomination) (*domain.Group, error) {
-	return domain.NewGroup("group-test", memberIDs, settings, history, nil, spellingsOf(history), nil)
+	return domain.NewGroup("group-test", memberIDs, settings, personsOf(history), history, nil, nil)
+}
+
+func named(t *testing.T, group *domain.Group, id domain.PersonID) string {
+	t.Helper()
+	person, ok := group.Person(id)
+	if !ok {
+		t.Fatalf("no Person %s", id)
+	}
+	return person.Name
 }
 
 func open(number domain.NominationNumber, person domain.Person, nominator member) domain.Nomination {
+	cast[person.ID] = person
 	return domain.Nomination{
 		Number:      number,
-		Person:      person,
+		Person:      person.ID,
 		Nominator:   nominator.ID,
 		Status:      domain.Nominated,
 		Votes:       map[domain.MemberID]domain.Vote{nominator.ID: domain.Yes},
@@ -68,9 +98,10 @@ func finalized(number domain.NominationNumber, person domain.Person, status doma
 	if status == domain.Rejected {
 		last = domain.No
 	}
+	cast[person.ID] = person
 	return domain.Nomination{
 		Number:      number,
-		Person:      person,
+		Person:      person.ID,
 		Nominator:   alex.ID,
 		Status:      status,
 		Votes:       map[domain.MemberID]domain.Vote{alex.ID: domain.Yes, blair.ID: domain.Yes, casey.ID: last},
@@ -82,7 +113,7 @@ func finalized(number domain.NominationNumber, person domain.Person, status doma
 func candidates(people ...domain.Person) []domain.Candidate {
 	list := make([]domain.Candidate, 0, len(people))
 	for _, person := range people {
-		list = append(list, domain.Candidate{Spelling: domain.Spelling(person.ID), Name: person.Name, Pitch: "A pitch for " + person.Name})
+		list = append(list, domain.Candidate{Spelling: spelling(person.Name), Name: person.Name, Pitch: "A pitch for " + person.Name})
 	}
 	return list
 }
@@ -174,7 +205,7 @@ func TestOneOpenNominationPerPerson(t *testing.T) {
 
 	_, err = group.Nominate(blair.ID, candidates(grace, grace), today)
 	refused = refusal(t, err, domain.OneOpenNominationPerPerson)
-	if refused.Ref.Spelling != domain.Spelling(grace.ID) || refused.Ref.Person == "" {
+	if refused.Ref.Spelling != spelling(grace.Name) || refused.Ref.Person == "" {
 		t.Fatalf("a message naming Grace twice must name her, got %+v", refused.Ref)
 	}
 	wantUnchanged(t, group, before)
@@ -208,7 +239,7 @@ func TestOpenNominationsWithinGroupLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a Group below its limit must accept the nomination: %v", err)
 	}
-	if len(opened) != 1 || nomination(t, group, opened[0].Number).Person.Name != katherine.Name || group.Spellings()[domain.Spelling(katherine.ID)] != nomination(t, group, opened[0].Number).Person.ID {
+	if len(opened) != 1 || named(t, group, nomination(t, group, opened[0].Number).Person) != katherine.Name || group.Spellings()[spelling(katherine.Name)] != nomination(t, group, opened[0].Number).Person {
 		t.Fatalf("want Katherine opened, got %+v", opened)
 	}
 }
@@ -245,7 +276,7 @@ func TestOpenNominationsWithinMemberLimit(t *testing.T) {
 		t.Fatalf("Blair has room under the member limit: %v", err)
 	}
 	got := nomination(t, group, opened[0].Number)
-	if got.Person.Name != grace.Name || got.Person.ID != group.Spellings()[domain.Spelling(grace.ID)] || got.Nominator != blair.ID || got.Votes[blair.ID] != domain.Yes {
+	if named(t, group, got.Person) != grace.Name || got.Person != group.Spellings()[spelling(grace.Name)] || got.Nominator != blair.ID || got.Votes[blair.ID] != domain.Yes {
 		t.Fatalf("want Grace nominated by Blair with Blair's yes, got %+v", got)
 	}
 }
@@ -367,7 +398,7 @@ func TestRenominatedOnlyThroughRenomination(t *testing.T) {
 		t.Fatalf("renomination must open a Nomination: %v", err)
 	}
 	got := nomination(t, group, renominated[0].Number)
-	if got.Number != 3 || got.Person != ada || got.Nominator != blair.ID || got.Status != domain.Nominated {
+	if got.Number != 3 || got.Person != ada.ID || got.Nominator != blair.ID || got.Status != domain.Nominated {
 		t.Fatalf("want Nomination 3 of Ada as first named, by Blair and open, got %+v", got)
 	}
 }
@@ -389,7 +420,7 @@ func TestRenominatedOnlyWhenRejected(t *testing.T) {
 
 	_, err = group.Renominate(blair.ID, candidates(katherine), today)
 	refused = refusal(t, err, domain.RenominatedOnlyWhenRejected)
-	if refused.Ref.Spelling != domain.Spelling(katherine.ID) || len(refused.Numbers) != 0 {
+	if refused.Ref.Spelling != spelling(katherine.Name) || len(refused.Numbers) != 0 {
 		t.Fatalf("a Person never nominated must be named with no Nomination, got %+v", refused)
 	}
 	wantUnchanged(t, group, before)

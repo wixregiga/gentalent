@@ -36,7 +36,7 @@ func TestANomineeIsMatchedByTheirKey(t *testing.T) {
 	h.send(alex, "!gt José Vale. Pitch")
 	contains(t, h.say(blair, "!gt JOSÉ  vale 👀. Again"), "Already nominated: José Vale (#1)")
 	h.send(blair, "!gt Jose Vale. Pitch")
-	if got := h.nomination(2).Person.Name; got != "Jose Vale" {
+	if got := h.nominee(2); got != "Jose Vale" {
 		t.Fatalf("B34 accents are part of the key, so Jose Vale is another Person, got %q", got)
 	}
 }

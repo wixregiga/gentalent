@@ -112,7 +112,7 @@ func TestStoreKeepsEveryChangeOfTheGroup(t *testing.T) {
 
 	got := loaded(t, store).Nominations()[0]
 	want := domain.Nomination{
-		Number: 1, Person: domain.Person{ID: loaded(t, store).Spellings()["adalovelace"], Name: "Ada Lovelace"}, Nominator: alex, Status: domain.Rejected,
+		Number: 1, Person: loaded(t, store).Spellings()["adalovelace"], Nominator: alex, Status: domain.Rejected,
 		Votes:       map[domain.MemberID]domain.Vote{alex: domain.Yes, blair: domain.Yes, casey: domain.No},
 		Reactions:   map[domain.MemberID]domain.Vote{casey: domain.No},
 		NominatedAt: today, LockedAt: today.Add(time.Second), FinalizedAt: today.Add(2 * time.Second),

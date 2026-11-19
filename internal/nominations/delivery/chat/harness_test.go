@@ -99,6 +99,15 @@ func (h *harness) nomination(number domain.NominationNumber) domain.Nomination {
 	return nomination
 }
 
+func (h *harness) nominee(number domain.NominationNumber) string {
+	h.t.Helper()
+	person, ok := h.ports.group().Person(h.nomination(number).Person)
+	if !ok {
+		h.t.Fatalf("Nomination %d names no stored Person", number)
+	}
+	return person.Name
+}
+
 func (h *harness) open() []domain.Nomination {
 	return h.ports.group().Open()
 }

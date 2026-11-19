@@ -22,11 +22,11 @@ func TestAMisspelledNameIsFixedWhenEveryMemberAgrees(t *testing.T) {
 		"Fix 1 for #1: Ada Lovelase → Ada Lovelace? Votes carry over.", "@Casey proposed it. It needs 3 of 3 Members.",
 		"Agree: !gtfixyes 1 · Stop: !gtfixno 1", "It lapses in 24 hours")
 	contains(t, h.say(alex, "!gtfixyes 1"), "Fix 1: @Alex agrees. 2 of 3 agree; it needs 3.")
-	if got := h.nomination(1).Person.Name; got != "Ada Lovelase" {
+	if got := h.nominee(1); got != "Ada Lovelase" {
 		t.Fatalf("two of three agreeing changed the name to %q", got)
 	}
 	contains(t, h.say(blair, "!gtfixyes 1"), "Name fixed for #1: Ada Lovelase → Ada Lovelace. Votes and history carried over.")
-	if got := h.nomination(1); got.Person.Name != "Ada Lovelace" || got.Votes[alex.ID] != domain.Yes || len(got.Votes) != 1 {
+	if got := h.nomination(1); h.nominee(1) != "Ada Lovelace" || got.Votes[alex.ID] != domain.Yes || len(got.Votes) != 1 {
 		t.Fatalf("after the fix: %+v", got)
 	}
 
@@ -58,7 +58,7 @@ func TestOneNoStopsAFixThatNeedsEveryMember(t *testing.T) {
 	h.send(alex, "!gtfix 1 Ada Lovelace")
 	contains(t, h.say(blair, "!gtfixno 1"), "Fix 1 stopped. Ada Lovelase (#1) keeps that name.")
 	contains(t, h.say(casey, "!gtfixyes 1"), "Fix 1 is over: it was stopped.")
-	if got := h.nomination(1).Person.Name; got != "Ada Lovelase" {
+	if got := h.nominee(1); got != "Ada Lovelase" {
 		t.Fatalf("a stopped fix changed the name to %q", got)
 	}
 	contains(t, h.say(blair, "!gtfix 1 Ada Lovelace"), "Fix 2 for #1")
@@ -107,7 +107,7 @@ func TestAFixWithPhotosSearchesUnderTheNewName(t *testing.T) {
 	contains(t, h.say(alex, "!!gtfix 1 Ada Lovelace"), "Photos are searched under the new name once it's fixed.")
 	h.send(blair, "!gtfixyes 1")
 	contains(t, h.say(casey, "!gtfixyes 1"), "Name fixed for #1", "Photos are on the way.")
-	if got := h.nomination(1); got.Photos != domain.PhotosRequested || got.Person.Name != "Ada Lovelace" {
+	if got := h.nomination(1); got.Photos != domain.PhotosRequested || h.nominee(1) != "Ada Lovelace" {
 		t.Fatalf("after a fix with photos: %+v", got)
 	}
 

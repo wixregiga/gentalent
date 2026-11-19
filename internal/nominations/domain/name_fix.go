@@ -81,13 +81,14 @@ func (g *Group) ProposeNameFix(by MemberID, proposal NameFixProposal, at time.Ti
 		return NameFix{}, Refusal{Rule: UnknownNomination, Ref: Ref{Number: proposal.Nomination}}
 	}
 	nomination := next.nominations[i]
-	if proposal.Name == nomination.Person.Name {
+	person := next.persons[nomination.Person]
+	if proposal.Name == person.Name {
 		return NameFix{}, Refusal{Rule: NameUnchanged, Numbers: []NominationNumber{nomination.Number}}
 	}
-	if err := next.AssertNameFixedOncePerPerson(nomination.Person.ID); err != nil {
+	if err := next.AssertNameFixedOncePerPerson(person.ID); err != nil {
 		return NameFix{}, err
 	}
-	if err := next.AssertNameFixNeverTakesAnotherPersonsSpelling(nomination.Person.ID, proposal.Spelling); err != nil {
+	if err := next.AssertNameFixNeverTakesAnotherPersonsSpelling(person.ID, proposal.Spelling); err != nil {
 		return NameFix{}, err
 	}
 	if proposal.WithPhotos {
@@ -98,8 +99,8 @@ func (g *Group) ProposeNameFix(by MemberID, proposal NameFixProposal, at time.Ti
 	fix := NameFix{
 		Number:     next.nextFixNumber(),
 		Nomination: nomination.Number,
-		Person:     nomination.Person.ID,
-		From:       nomination.Person.Name,
+		Person:     person.ID,
+		From:       person.Name,
 		To:         proposal.Name,
 		Spelling:   proposal.Spelling,
 		Proposer:   by,
@@ -140,7 +141,7 @@ func (g *Group) AgreeToNameFix(by MemberID, number NameFixNumber, at time.Time) 
 			return NameFix{}, err
 		}
 		next.fixName(i, at)
-		if err := next.AssertEarlierSpellingsStillNameThePerson(g.spellings, fix.Person); err != nil {
+		if err := next.AssertEarlierSpellingsStillNameThePerson(g.persons[fix.Person].Spellings, fix.Person); err != nil {
 			return NameFix{}, err
 		}
 	}
@@ -225,7 +226,7 @@ func (g *Group) AssertNameFixedOncePerPerson(person PersonID) error {
 }
 
 func (g *Group) AssertNameFixNeverTakesAnotherPersonsSpelling(person PersonID, spelling Spelling) error {
-	if other, named := g.spellings[spelling]; named && other != person {
+	if other, named := g.spelled(spelling); named && other != person {
 		refusal := Refusal{Rule: NameFixNeverTakesAnotherPersonsSpelling, Ref: Ref{Person: other}}
 		if i, ok := g.latestOf(other); ok {
 			refusal.Numbers = []NominationNumber{g.nominations[i].Number}
@@ -235,9 +236,9 @@ func (g *Group) AssertNameFixNeverTakesAnotherPersonsSpelling(person PersonID, s
 	return nil
 }
 
-func (g *Group) AssertEarlierSpellingsStillNameThePerson(earlier map[Spelling]PersonID, person PersonID) error {
-	for spelling, named := range earlier {
-		if named == person && g.spellings[spelling] != person {
+func (g *Group) AssertEarlierSpellingsStillNameThePerson(earlier []Spelling, person PersonID) error {
+	for _, spelling := range earlier {
+		if named, ok := g.spelled(spelling); !ok || named != person {
 			return Refusal{Rule: EarlierSpellingsStillNameThePerson, Ref: Ref{Person: person}}
 		}
 	}
@@ -304,12 +305,12 @@ func (g *Group) outOfReach(fix NameFix) bool {
 
 func (g *Group) fixName(i int, at time.Time) {
 	fix := &g.nameFixes[i]
-	for k := range g.nominations {
-		if g.nominations[k].Person.ID == fix.Person {
-			g.nominations[k].Person.Name = fix.To
-		}
+	person := g.persons[fix.Person].clone()
+	person.Name = fix.To
+	if !person.SpelledAs(fix.Spelling) {
+		person.Spellings = append(person.Spellings, fix.Spelling)
 	}
-	g.spellings[fix.Spelling] = fix.Person
+	g.persons[fix.Person] = person
 	fix.Status, fix.EndedAt = NameFixed, at
 	if !fix.WithPhotos {
 		return

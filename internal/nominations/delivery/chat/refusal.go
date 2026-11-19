@@ -106,7 +106,7 @@ func (w wording) alreadyDecided(latest domain.Nomination, renominable bool) stri
 		return "Already a Generational Talent: " + w.name(latest.Number) + "."
 	}
 	if renominable {
-		return lines("Rejected before: "+w.name(latest.Number)+".", "Renominate: !gtrenominate "+literal(latest.Person.Name)+". Pitch")
+		return lines("Rejected before: "+w.name(latest.Number)+".", "Renominate: !gtrenominate "+w.person(latest.Person)+". Pitch")
 	}
 	return "Rejected before: " + w.name(latest.Number) + ". They can't be nominated again."
 }

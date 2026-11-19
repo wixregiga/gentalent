@@ -29,7 +29,7 @@ func TestScenarioLoweringTheLimitRefusesOnlyNewNominations(t *testing.T) {
 	h.send(blair, "!gt Ada Lovelace. Engines")
 	h.send(casey, "!gt Grace Hopper. Compilers")
 	lowered := newHarness(t, severalOpen(1, 1))
-	lowered.ports.nominations, lowered.ports.spellings = h.ports.nominations, h.ports.spellings
+	lowered.ports.persons, lowered.ports.nominations = h.ports.persons, h.ports.nominations
 
 	contains(t, lowered.say(alex, "!gt Katherine Johnson. Orbital math"), "Finish voting first")
 	lowered.say(alex, "!!Y 1")
@@ -44,7 +44,7 @@ func TestScenarioAMemberAtTheMemberLimitCannotNominateAgain(t *testing.T) {
 
 	contains(t, h.say(alex, "!gt Grace Hopper. Compilers"), "You already have 1 open Nominations", "Nomination 1: Ada Lovelace")
 	h.send(blair, "!gt Grace Hopper. Compilers")
-	if got := h.nomination(2); got.Person.Name != "Grace Hopper" || got.Nominator != blair.ID {
+	if got := h.nomination(2); h.nominee(2) != "Grace Hopper" || got.Nominator != blair.ID {
 		t.Fatalf("Blair can still nominate Grace Hopper, got %+v", got)
 	}
 }

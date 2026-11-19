@@ -67,8 +67,8 @@ func (g *Group) Nominate(by MemberID, candidates []Candidate, at time.Time) ([]N
 	}
 	for _, k := range fresh {
 		candidate := candidates[k]
-		next.spellings[candidate.Spelling] = people[k]
-		nominated[k] = NominateOutcome{Number: next.openNomination(by, Person{ID: people[k], Name: candidate.Name}, candidate, at).Number}
+		next.persons[people[k]] = Person{ID: people[k], Name: candidate.Name, Spellings: []Spelling{candidate.Spelling}}
+		nominated[k] = NominateOutcome{Number: next.openNomination(by, people[k], candidate, at).Number}
 	}
 	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
@@ -106,9 +106,7 @@ func (g *Group) Renominate(by MemberID, candidates []Candidate, at time.Time) ([
 	}
 	renominated := make([]Nomination, 0, len(candidates))
 	for k, candidate := range candidates {
-		i, _ := next.latestOf(people[k])
-		next.spellings[candidate.Spelling] = people[k]
-		renominated = append(renominated, next.openNomination(by, next.nominations[i].Person, candidate, at))
+		renominated = append(renominated, next.openNomination(by, people[k], candidate, at))
 	}
 	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
@@ -185,7 +183,7 @@ func (g *Group) AssertPhotosSearchedAtMostOncePerNomination(nomination Nominatio
 	return nil
 }
 
-func (g *Group) openNomination(by MemberID, person Person, candidate Candidate, at time.Time) Nomination {
+func (g *Group) openNomination(by MemberID, person PersonID, candidate Candidate, at time.Time) Nomination {
 	nomination := Nomination{
 		Number:      g.nextNumber(),
 		Person:      person,
@@ -216,7 +214,7 @@ func (g *Group) people(candidates []Candidate, at time.Time) ([]PersonID, error)
 	unknown := map[Spelling]PersonID{}
 	seen := map[PersonID]bool{}
 	for k, candidate := range candidates {
-		person, known := g.spellings[candidate.Spelling]
+		person, known := g.spelled(candidate.Spelling)
 		if !known {
 			if person, known = unknown[candidate.Spelling]; !known {
 				person = newPersonID(at)

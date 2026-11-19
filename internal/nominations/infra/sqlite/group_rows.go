@@ -10,7 +10,11 @@ import (
 	"gentalent/internal/nominations/domain"
 )
 
-func loadGroupRows(ctx context.Context, tx *sql.Tx) ([]domain.Nomination, []domain.Shame, map[domain.Spelling]domain.PersonID, []domain.NameFix, error) {
+func loadGroupRows(ctx context.Context, tx *sql.Tx) ([]domain.Person, []domain.Nomination, []domain.Shame, []domain.NameFix, error) {
+	persons, err := loadPersons(ctx, tx)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
 	nominations, err := loadNominations(ctx, tx)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -19,20 +23,16 @@ func loadGroupRows(ctx context.Context, tx *sql.Tx) ([]domain.Nomination, []doma
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	spellings, err := loadSpellings(ctx, tx)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
 	nameFixes, err := loadNameFixes(ctx, tx)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	return nominations, shames, spellings, nameFixes, nil
+	return persons, nominations, shames, nameFixes, nil
 }
 
 func loadNominations(ctx context.Context, tx *sql.Tx) ([]domain.Nomination, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT n.number, n.person_id, p.name, n.nominator, n.status, n.nominated_at, n.locked_at,
-		n.finalized_at, n.pitch, n.photos, n.strip FROM nominations n JOIN persons p ON p.id = n.person_id ORDER BY n.number`)
+	rows, err := tx.QueryContext(ctx, `SELECT number, person_id, nominator, status, nominated_at, locked_at,
+		finalized_at, pitch, photos, strip FROM nominations ORDER BY number`)
 	if err != nil {
 		return nil, fmt.Errorf("load nominations: %w", err)
 	}
@@ -42,7 +42,7 @@ func loadNominations(ctx context.Context, tx *sql.Tx) ([]domain.Nomination, erro
 	for rows.Next() {
 		var n domain.Nomination
 		var nominatedAt, lockedAt, finalizedAt string
-		if err := rows.Scan(&n.Number, &n.Person.ID, &n.Person.Name, &n.Nominator, &n.Status, &nominatedAt, &lockedAt,
+		if err := rows.Scan(&n.Number, &n.Person, &n.Nominator, &n.Status, &nominatedAt, &lockedAt,
 			&finalizedAt, &n.Pitch, &n.Photos, &n.Strip); err != nil {
 			return nil, fmt.Errorf("load nominations: %w", err)
 		}
@@ -140,8 +140,11 @@ func loadShames(ctx context.Context, tx *sql.Tx) ([]domain.Shame, error) {
 	return shames, rows.Err()
 }
 
-func saveGroupRows(ctx context.Context, tx *sql.Tx, nominations []domain.Nomination, shames []domain.Shame,
-	spellings map[domain.Spelling]domain.PersonID, nameFixes []domain.NameFix, group *domain.Group) error {
+func saveGroupRows(ctx context.Context, tx *sql.Tx, persons []domain.Person, nominations []domain.Nomination, shames []domain.Shame,
+	nameFixes []domain.NameFix, group *domain.Group) error {
+	if err := savePersons(ctx, tx, persons, group.Persons()); err != nil {
+		return err
+	}
 	known := map[domain.NominationNumber]domain.Nomination{}
 	for _, n := range nominations {
 		known[n.Number] = n
@@ -152,12 +155,6 @@ func saveGroupRows(ctx context.Context, tx *sql.Tx, nominations []domain.Nominat
 		if err := saveNomination(ctx, tx, was, existed, n); err != nil {
 			return fmt.Errorf("save nomination %d: %w", n.Number, err)
 		}
-	}
-	if err := savePersonNames(ctx, tx, nominations, after); err != nil {
-		return err
-	}
-	if err := saveSpellings(ctx, tx, spellings, group.Spellings()); err != nil {
-		return err
 	}
 	given := map[domain.ShameID]bool{}
 	for _, s := range shames {
@@ -172,28 +169,6 @@ func saveGroupRows(ctx context.Context, tx *sql.Tx, nominations []domain.Nominat
 		}
 	}
 	return saveNameFixes(ctx, tx, nameFixes, group.NameFixes())
-}
-
-func savePersonNames(ctx context.Context, tx *sql.Tx, before, after []domain.Nomination) error {
-	was, now := personNames(before), personNames(after)
-	for _, person := range slices.Sorted(maps.Keys(now)) {
-		old, known := was[person]
-		if !known || old == now[person] {
-			continue
-		}
-		if _, err := tx.ExecContext(ctx, "UPDATE persons SET name = ? WHERE id = ?", now[person], person); err != nil {
-			return fmt.Errorf("save the name of Person %s: %w", person, err)
-		}
-	}
-	return nil
-}
-
-func personNames(nominations []domain.Nomination) map[domain.PersonID]string {
-	names := map[domain.PersonID]string{}
-	for _, n := range nominations {
-		names[n.Person.ID] = n.Person.Name
-	}
-	return names
 }
 
 func saveNomination(ctx context.Context, tx *sql.Tx, was domain.Nomination, existed bool, after domain.Nomination) error {
@@ -223,12 +198,9 @@ func saveNomination(ctx context.Context, tx *sql.Tx, was domain.Nomination, exis
 }
 
 func insertNomination(ctx context.Context, tx *sql.Tx, n domain.Nomination) error {
-	if _, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO persons(id, name) VALUES(?, ?)", n.Person.ID, n.Person.Name); err != nil {
-		return err
-	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO nominations(number, person_id, nominator, status, nominated_at, locked_at,
 		finalized_at, pitch, photos, strip) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		n.Number, n.Person.ID, n.Nominator, n.Status, formatTime(n.NominatedAt), formatTime(n.LockedAt),
+		n.Number, n.Person, n.Nominator, n.Status, formatTime(n.NominatedAt), formatTime(n.LockedAt),
 		formatTime(n.FinalizedAt), n.Pitch, n.Photos, n.Strip)
 	return err
 }

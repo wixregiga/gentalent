@@ -19,19 +19,6 @@ func proposal(number domain.NominationNumber, name string) domain.NameFixProposa
 	return domain.NameFixProposal{Nomination: number, Name: name, Spelling: spelling(name)}
 }
 
-func spelling(name string) domain.Spelling {
-	var folded []rune
-	for _, r := range name {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			folded = append(folded, r)
-		case r >= 'A' && r <= 'Z':
-			folded = append(folded, r+'a'-'A')
-		}
-	}
-	return domain.Spelling(folded)
-}
-
 func propose(t *testing.T, group *domain.Group, by member, p domain.NameFixProposal) domain.NameFix {
 	t.Helper()
 	fix, err := group.ProposeNameFix(by.ID, p, today)
@@ -56,7 +43,7 @@ func personName(t *testing.T, group *domain.Group, number domain.NominationNumbe
 	if !ok {
 		t.Fatalf("no Nomination %d", number)
 	}
-	return nomination.Person.Name
+	return named(t, group, nomination.Person)
 }
 
 func TestNameFixedOnlyWhenEnoughMembersAgree(t *testing.T) {
@@ -95,7 +82,7 @@ func TestNameFixCarriesTheWholePersonAndTheirVotes(t *testing.T) {
 	agree(t, group, blair, fix.Number)
 	for _, number := range []domain.NominationNumber{1, 2} {
 		nomination, _ := group.Nomination(number)
-		if nomination.Person != (domain.Person{ID: misspelled.ID, Name: "Ada Lovelace"}) {
+		if nomination.Person != misspelled.ID || named(t, group, nomination.Person) != "Ada Lovelace" {
 			t.Fatalf("Nomination %d names %+v", number, nomination.Person)
 		}
 	}
@@ -112,7 +99,7 @@ func TestCertifiedPersonCanBeFixed(t *testing.T) {
 	fix := propose(t, group, alex, proposal(1, "Ada Lovelace"))
 	agree(t, group, blair, fix.Number)
 	agree(t, group, casey, fix.Number)
-	if nomination, _ := group.Nomination(1); nomination.Person.Name != "Ada Lovelace" || nomination.Status != domain.Certified {
+	if nomination, _ := group.Nomination(1); named(t, group, nomination.Person) != "Ada Lovelace" || nomination.Status != domain.Certified {
 		t.Fatalf("certified Person after the fix: %+v", nomination)
 	}
 }
@@ -125,7 +112,7 @@ func TestOnePendingNameFixPerPerson(t *testing.T) {
 		t.Fatalf("the refusal names fix %d, want the pending %d", refused.Fix, first.Number)
 	}
 	history := []domain.Nomination{open(1, misspelled, alex)}
-	if _, err := domain.NewGroup("group-test", memberIDs, fixing(100), history, nil, spellingsOf(history), []domain.NameFix{
+	if _, err := domain.NewGroup("group-test", memberIDs, fixing(100), personsOf(history), history, nil, []domain.NameFix{
 		{Number: 1, Nomination: 1, Person: misspelled.ID, Status: domain.NameFixPending},
 		{Number: 2, Nomination: 1, Person: misspelled.ID, Status: domain.NameFixPending},
 	}); !errors.As(err, new(domain.Refusal)) {
@@ -173,7 +160,7 @@ func TestNameFixNeverTakesAnotherPersonsSpelling(t *testing.T) {
 		t.Fatalf("a fix took a spelling another Person got while it waited")
 	}
 
-	group = newGroup(t, fixing(100), open(1, domain.Person{ID: "adalovelace", Name: "ada lovelace"}, alex))
+	group = newGroup(t, fixing(100), open(1, domain.Person{ID: "ada-in-lower-case", Name: "ada lovelace"}, alex))
 	fix := propose(t, group, alex, proposal(1, "Ada Lovelace"))
 	agree(t, group, blair, fix.Number)
 	if fix = agree(t, group, casey, fix.Number); fix.Status != domain.NameFixed {
@@ -195,7 +182,7 @@ func TestEarlierSpellingsStillNameThePerson(t *testing.T) {
 	_, err := group.Nominate(blair.ID, []domain.Candidate{{Spelling: spelling("Ada Lovelase"), Name: "Ada Lovelase"}}, today)
 	refusal(t, err, domain.RenominatedOnlyThroughRenomination)
 	renominated, err := group.Renominate(blair.ID, []domain.Candidate{{Spelling: spelling("Ada Lovelase"), Name: "Ada Lovelase"}}, today)
-	if err != nil || renominated[0].Person.ID != misspelled.ID || renominated[0].Person.Name != "Ada Lovelace" {
+	if err != nil || renominated[0].Person != misspelled.ID || named(t, group, renominated[0].Person) != "Ada Lovelace" {
 		t.Fatalf("renominating by the old spelling: %+v, %v", renominated, err)
 	}
 }
@@ -294,7 +281,7 @@ func TestNameFixWithPhotosSearchesOnceUnderTheNewName(t *testing.T) {
 	agree(t, group, blair, fix.Number)
 	agree(t, group, casey, fix.Number)
 	claimed, err := group.ClaimPhotoSearches()
-	if err != nil || len(claimed) != 1 || claimed[0].Person.Name != "Ada Lovelace" {
+	if err != nil || len(claimed) != 1 || named(t, group, claimed[0].Person) != "Ada Lovelace" {
 		t.Fatalf("photo search after the fix: %+v, %v", claimed, err)
 	}
 

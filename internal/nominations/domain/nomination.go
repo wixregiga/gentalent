@@ -22,7 +22,7 @@ const exhibitLimit = 2000
 
 type Nomination struct {
 	Number      NominationNumber
-	Person      Person
+	Person      PersonID
 	Nominator   MemberID
 	Status      CertificationStatus
 	Votes       map[MemberID]Vote

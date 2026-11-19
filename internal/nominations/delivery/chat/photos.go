@@ -20,12 +20,12 @@ func (b *Bot) ClaimPhotoSearches(ctx context.Context) ([]PhotoSearch, error) {
 		return nil, err
 	}
 	searches := make([]PhotoSearch, len(claimed))
-	for i, nomination := range claimed {
+	for i, search := range claimed {
 		searches[i] = PhotoSearch{
-			Nomination: int(nomination.Number),
-			Person:     nomination.Person.Name,
-			Pitch:      nomination.Pitch,
-			Dir:        filepath.Join(b.config.MediaDir, "nominations", fmt.Sprintf("%d-%s", nomination.Number, slug(nomination.Person.Name))),
+			Nomination: int(search.Nomination),
+			Person:     search.Person,
+			Pitch:      search.Pitch,
+			Dir:        filepath.Join(b.config.MediaDir, "nominations", fmt.Sprintf("%d-%s", search.Nomination, slug(search.Person))),
 		}
 	}
 	return searches, nil

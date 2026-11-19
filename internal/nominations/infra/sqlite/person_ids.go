@@ -5,18 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const outcomesTrigger = "keep_outcomes_update"
 
-func newPersonID() (string, error) {
-	id, err := uuid.NewV7()
-	if err != nil {
-		return "", fmt.Errorf("make a Person ID: %w", err)
-	}
-	return id.String(), nil
+func newPersonID() string {
+	return uuid.NewV7().String()
 }
 
 func giveEveryPersonAnOpaqueID(ctx context.Context, tx *sql.Tx) error {
@@ -35,10 +30,7 @@ func giveEveryPersonAnOpaqueID(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	for _, old := range persons {
-		id, err := newPersonID()
-		if err != nil {
-			return err
-		}
+		id := newPersonID()
 		if err := rekeyPerson(ctx, tx, old, id); err != nil {
 			return fmt.Errorf("re-key Person %q: %w", old, err)
 		}

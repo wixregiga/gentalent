@@ -16,23 +16,38 @@ type Group struct {
 	settings    Settings
 	nominations []Nomination
 	shames      []Shame
-	spellings   map[Spelling]PersonID
+	persons     map[PersonID]Person
 	nameFixes   []NameFix
 }
 
-func NewGroup(id GroupID, members []MemberID, settings Settings, nominations []Nomination, shames []Shame,
-	spellings map[Spelling]PersonID, nameFixes []NameFix) (*Group, error) {
+func NewGroup(id GroupID, members []MemberID, settings Settings, persons []Person, nominations []Nomination, shames []Shame,
+	nameFixes []NameFix) (*Group, error) {
 	group := &Group{
 		id:          id,
 		members:     roster(members),
 		settings:    settings,
 		nominations: cloneAll(nominations),
 		shames:      slices.Clone(shames),
-		spellings:   maps.Clone(spellings),
+		persons:     map[PersonID]Person{},
 		nameFixes:   cloneFixes(nameFixes),
 	}
-	if group.spellings == nil {
-		group.spellings = map[Spelling]PersonID{}
+	named := map[Spelling]PersonID{}
+	for _, person := range persons {
+		if _, twice := group.persons[person.ID]; twice {
+			return nil, fmt.Errorf("Person %s is loaded twice", person.ID)
+		}
+		for _, spelling := range person.Spellings {
+			if other, taken := named[spelling]; taken {
+				return nil, fmt.Errorf("the spelling %q names both %s and %s", spelling, other, person.ID)
+			}
+			named[spelling] = person.ID
+		}
+		group.persons[person.ID] = person.clone()
+	}
+	for _, nomination := range group.nominations {
+		if _, known := group.persons[nomination.Person]; !known {
+			return nil, fmt.Errorf("Nomination %d names Person %s, who is not loaded", nomination.Number, nomination.Person)
+		}
 	}
 	slices.SortFunc(group.nominations, func(a, b Nomination) int { return int(a.Number - b.Number) })
 	slices.SortFunc(group.nameFixes, func(a, b NameFix) int { return int(a.Number - b.Number) })
@@ -43,8 +58,36 @@ func NewGroup(id GroupID, members []MemberID, settings Settings, nominations []N
 	return group, nil
 }
 
+func (g *Group) Person(id PersonID) (Person, bool) {
+	person, ok := g.persons[id]
+	return person.clone(), ok
+}
+
+func (g *Group) Persons() []Person {
+	persons := make([]Person, 0, len(g.persons))
+	for _, id := range slices.Sorted(maps.Keys(g.persons)) {
+		persons = append(persons, g.persons[id].clone())
+	}
+	return persons
+}
+
 func (g *Group) Spellings() map[Spelling]PersonID {
-	return maps.Clone(g.spellings)
+	spellings := map[Spelling]PersonID{}
+	for id, person := range g.persons {
+		for _, spelling := range person.Spellings {
+			spellings[spelling] = id
+		}
+	}
+	return spellings
+}
+
+func (g *Group) spelled(spelling Spelling) (PersonID, bool) {
+	for id, person := range g.persons {
+		if person.SpelledAs(spelling) {
+			return id, true
+		}
+	}
+	return "", false
 }
 
 func (g *Group) NameFixes() []NameFix {
@@ -119,10 +162,10 @@ func (g *Group) EnsureNominationLimitNotLessThanOne() error {
 func (g *Group) EnsureOneOpenNominationPerPerson() error {
 	open := map[PersonID][]Nomination{}
 	for _, nomination := range g.open() {
-		open[nomination.Person.ID] = append(open[nomination.Person.ID], nomination)
+		open[nomination.Person] = append(open[nomination.Person], nomination)
 	}
 	for _, nomination := range g.open() {
-		if twice := open[nomination.Person.ID]; len(twice) > 1 {
+		if twice := open[nomination.Person]; len(twice) > 1 {
 			return Refusal{Rule: OneOpenNominationPerPerson, Numbers: numbers(twice)}
 		}
 	}
@@ -171,7 +214,10 @@ func (g *Group) clone() *Group {
 	copied := *g
 	copied.nominations = cloneAll(g.nominations)
 	copied.shames = slices.Clone(g.shames)
-	copied.spellings = maps.Clone(g.spellings)
+	copied.persons = make(map[PersonID]Person, len(g.persons))
+	for id, person := range g.persons {
+		copied.persons[id] = person.clone()
+	}
 	copied.nameFixes = cloneFixes(g.nameFixes)
 	return &copied
 }
@@ -215,7 +261,7 @@ func (g *Group) openOf(member MemberID) []Nomination {
 
 func (g *Group) latestOf(person PersonID) (int, bool) {
 	for i := len(g.nominations) - 1; i >= 0; i-- {
-		if g.nominations[i].Person.ID == person {
+		if g.nominations[i].Person == person {
 			return i, true
 		}
 	}

@@ -32,11 +32,11 @@ func NewStore(ctx context.Context, db *sql.DB, id domain.GroupID, members []doma
 		case recorded != string(id):
 			return errors.New("the nominations database belongs to another Group; use a separate database")
 		}
-		nominations, shames, spellings, nameFixes, err := loadGroupRows(ctx, tx)
+		persons, nominations, shames, nameFixes, err := loadGroupRows(ctx, tx)
 		if err != nil {
 			return err
 		}
-		_, err = domain.NewGroup(id, members, settings, nominations, shames, spellings, nameFixes)
+		_, err = domain.NewGroup(id, members, settings, persons, nominations, shames, nameFixes)
 		return err
 	})
 	if err != nil {
@@ -50,11 +50,11 @@ func (s *Store) Apply(ctx context.Context, messageID string, change port.Change)
 		if handled, err := s.claim(ctx, tx, messageID); err != nil || handled {
 			return err
 		}
-		nominations, shames, spellings, nameFixes, err := loadGroupRows(ctx, tx)
+		persons, nominations, shames, nameFixes, err := loadGroupRows(ctx, tx)
 		if err != nil {
 			return err
 		}
-		group, err := domain.NewGroup(s.id, s.members, s.settings, nominations, shames, spellings, nameFixes)
+		group, err := domain.NewGroup(s.id, s.members, s.settings, persons, nominations, shames, nameFixes)
 		if err != nil {
 			return fmt.Errorf("load the Group: %w", err)
 		}
@@ -62,7 +62,7 @@ func (s *Store) Apply(ctx context.Context, messageID string, change port.Change)
 		if err != nil {
 			return err
 		}
-		if err := saveGroupRows(ctx, tx, nominations, shames, spellings, nameFixes, group); err != nil {
+		if err := saveGroupRows(ctx, tx, persons, nominations, shames, nameFixes, group); err != nil {
 			return err
 		}
 		return insertReplies(ctx, tx, replies)

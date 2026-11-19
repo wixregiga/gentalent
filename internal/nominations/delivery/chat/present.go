@@ -50,14 +50,12 @@ func (w wording) nomination(number domain.NominationNumber) domain.Nomination {
 }
 
 func (w wording) name(number domain.NominationNumber) string {
-	return literal(w.nomination(number).Person.Name) + fmt.Sprintf(" (#%d)", number)
+	return w.person(w.nomination(number).Person) + fmt.Sprintf(" (#%d)", number)
 }
 
 func (w wording) person(id domain.PersonID) string {
-	for _, nomination := range w.group.Nominations() {
-		if nomination.Person.ID == id {
-			return literal(nomination.Person.Name)
-		}
+	if person, ok := w.group.Person(id); ok {
+		return literal(person.Name)
 	}
 	return ""
 }
@@ -82,7 +80,8 @@ func (w wording) listed(numbers []domain.NominationNumber) []string {
 	listed := make([]string, len(numbers))
 	for i, number := range numbers {
 		nomination := w.nomination(number)
-		listed[i] = listedNomination(number, nomination.Person.Name, len(nomination.Votes), len(w.bot.config.Members))
+		person, _ := w.group.Person(nomination.Person)
+		listed[i] = listedNomination(number, person.Name, len(nomination.Votes), len(w.bot.config.Members))
 	}
 	return listed
 }

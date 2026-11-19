@@ -7,8 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"gentalent/internal/nominations/domain"
 	"gentalent/internal/nominations/infra/sqlite"
@@ -112,7 +111,7 @@ func TestEveryPersonGetsAnOpaqueIDAndKeepsTheirBallot(t *testing.T) {
 			t.Fatal(err)
 		}
 		parsed, err := uuid.Parse(id)
-		if err != nil || parsed.Version() != 7 || parsed.String() != id {
+		if err != nil || parsed[6]>>4 != 7 || parsed[8]>>6 != 0b10 || parsed.String() != id {
 			t.Fatalf("Person %q has id %q, which is not a UUIDv7: %v", name, id, err)
 		}
 		ids[name] = id
@@ -139,7 +138,7 @@ func TestEveryPersonGetsAnOpaqueIDAndKeepsTheirBallot(t *testing.T) {
 	}
 	first, _ := group.Nomination(1)
 	again, _ := group.Nomination(4)
-	if first.Person != again.Person || first.Person.ID != domain.PersonID(ids["Ada Lovelace"]) || len(first.Votes) != 3 {
+	if first.Person != again.Person || first.Person != domain.PersonID(ids["Ada Lovelace"]) || len(first.Votes) != 3 {
 		t.Fatalf("a renominated Person is one Person with their finalized history, got %+v and %+v", first, again)
 	}
 

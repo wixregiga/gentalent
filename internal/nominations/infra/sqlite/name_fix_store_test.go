@@ -69,7 +69,7 @@ func TestANameFixIsKeptFromProposalToFixedName(t *testing.T) {
 	}
 	nomination, _ := group.Nomination(1)
 	ada := proposed.Person
-	if nomination.Person != (domain.Person{ID: ada, Name: "Ada Lovelace"}) || nomination.Photos != domain.PhotosRequested {
+	if person, _ := group.Person(ada); nomination.Person != ada || person.Name != "Ada Lovelace" || nomination.Photos != domain.PhotosRequested {
 		t.Fatalf("the fixed name and the photo search it asked for are kept, got %+v", nomination)
 	}
 	want := map[domain.Spelling]domain.PersonID{"adalovelase": ada, "adalovelace": ada}
@@ -132,8 +132,8 @@ func TestEndedNameFixesAreKeptWithoutChangingTheName(t *testing.T) {
 		t.Fatalf("a lapsed name fix reloads as lapsed:\ngot  %+v\nwant %+v", got, lapsed[0])
 	}
 	group := loaded(t, store)
-	if nomination, _ := group.Nomination(1); nomination.Person.Name != "Ada Lovelase" {
-		t.Fatalf("an ended name fix leaves the name, got %+v", nomination.Person)
+	if person, _ := group.Person(first.Person); person.Name != "Ada Lovelase" {
+		t.Fatalf("an ended name fix leaves the name, got %+v", person)
 	}
 	if spellings := group.Spellings(); len(spellings) != 1 || spellings["adalovelase"] != first.Person {
 		t.Fatalf("an ended name fix adds no spelling, got %v", spellings)

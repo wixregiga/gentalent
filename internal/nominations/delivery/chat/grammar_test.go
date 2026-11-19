@@ -81,8 +81,8 @@ func TestNomineeNames(t *testing.T) {
 			h := newHarness(t, oneAtATime)
 			reply := h.say(alex, "!gt "+c.body)
 			got := h.nomination(1)
-			if got.Person.Name != c.nominee || got.Pitch != c.pitch {
-				t.Fatalf("want %q with pitch %q, got %q with pitch %q", c.nominee, c.pitch, got.Person.Name, got.Pitch)
+			if h.nominee(1) != c.nominee || got.Pitch != c.pitch {
+				t.Fatalf("want %q with pitch %q, got %q with pitch %q", c.nominee, c.pitch, h.nominee(1), got.Pitch)
 			}
 			if c.pitch != "" && strings.Contains(reply, c.pitch) {
 				t.Fatalf("B32 the pitch is never shown, got %q", reply)
@@ -158,7 +158,7 @@ func domainNumber(number int) domain.NominationNumber {
 func TestHelpWithMoreWordsIsANominee(t *testing.T) {
 	h := newHarness(t, oneAtATime)
 	h.send(alex, "!gt help me")
-	if got := h.nomination(1).Person.Name; got != "Help Me" {
+	if got := h.nominee(1); got != "Help Me" {
 		t.Fatalf("B18 !gt help me nominates Help Me, got %q", got)
 	}
 }
