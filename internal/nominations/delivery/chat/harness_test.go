@@ -16,6 +16,7 @@ var (
 	alex   = chat.Member{ID: "member-alex", Name: "Alex"}
 	blair  = chat.Member{ID: "member-blair", Name: "Blair"}
 	casey  = chat.Member{ID: "member-casey", Name: "Casey"}
+	devon  = chat.Member{ID: "member-devon", Name: "Devon"}
 	roster = []chat.Member{alex, blair, casey}
 	start  = time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
 )
@@ -33,13 +34,18 @@ type harness struct {
 
 func newHarness(t *testing.T, settings domain.Settings, change ...func(*chat.Config)) *harness {
 	t.Helper()
+	return newRosterHarness(t, roster, settings, change...)
+}
+
+func newRosterHarness(t *testing.T, members []chat.Member, settings domain.Settings, change ...func(*chat.Config)) *harness {
+	t.Helper()
 	h := &harness{t: t, now: start}
-	ids := make([]domain.MemberID, len(roster))
-	for i, member := range roster {
+	ids := make([]domain.MemberID, len(members))
+	for i, member := range members {
 		ids[i] = member.ID
 	}
 	h.ports = newFakePorts(t, ids, settings)
-	config := chat.Config{Members: roster, Settings: settings, PhotoLayout: chat.Individual, MediaDir: "/media", Now: func() time.Time { return h.now }}
+	config := chat.Config{Members: members, Settings: settings, PhotoLayout: chat.Individual, MediaDir: "/media", Now: func() time.Time { return h.now }}
 	for _, apply := range change {
 		apply(&config)
 	}

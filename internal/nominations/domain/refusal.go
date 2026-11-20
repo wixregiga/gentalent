@@ -5,6 +5,7 @@ import "time"
 type Rule string
 
 const (
+	GroupHasAtLeastTwoMembers                Rule = "group-has-at-least-two-members"
 	OneOpenNominationPerPerson               Rule = "one-open-nomination-per-person"
 	CertifiedByUnanimousYes                  Rule = "certified-by-unanimous-yes"
 	OpenNominationsWithinGroupLimit          Rule = "open-nominations-within-group-limit"
@@ -16,7 +17,7 @@ const (
 	RenominatedOnlyWhenGroupAllows           Rule = "renominated-only-when-group-allows"
 	PhotosSearchedAtMostOncePerNomination    Rule = "photos-searched-at-most-once-per-nomination"
 	VoteNamesItsNomination                   Rule = "vote-names-its-nomination"
-	VotesChangeUntilTheThirdVote             Rule = "votes-change-until-the-third-vote"
+	VotesChangeUntilTheLastVote              Rule = "votes-change-until-the-last-vote"
 	RemovedReactionClearsOnlyItsVote         Rule = "removed-reaction-clears-only-its-vote"
 	FinalizedOnlyWhenAllVotesAreIn           Rule = "finalized-only-when-all-votes-are-in"
 	FinalizedEarlyOnlyByNominator            Rule = "finalized-early-only-by-nominator"

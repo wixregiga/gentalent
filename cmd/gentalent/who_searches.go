@@ -12,6 +12,10 @@ import (
 type whoSearches = searches[chat.WhoSearch, chat.WhoResult]
 
 func newWhoSearches(identifier *aicommand.Identifier, workers int, log *slog.Logger) whoSearches {
+	return newWhoSearchesWithSlots(identifier, workers, nil, log)
+}
+
+func newWhoSearchesWithSlots(identifier *aicommand.Identifier, workers int, slots chan struct{}, log *slog.Logger) whoSearches {
 	run := func(ctx context.Context, search chat.WhoSearch) chat.WhoResult {
 		found, err := identifier.Identify(ctx, aidomain.Description{Text: search.Description, Dir: search.Dir})
 		if err != nil {
@@ -26,5 +30,5 @@ func newWhoSearches(identifier *aicommand.Identifier, workers int, log *slog.Log
 	interrupted := func(search chat.WhoSearch, err error) chat.WhoResult {
 		return chat.WhoResult{Number: search.Number, Failure: err.Error()}
 	}
-	return newSearches(workers, run, interrupted)
+	return newSearchesWithSlots(workers, slots, run, interrupted)
 }

@@ -51,3 +51,30 @@ func TestDoctorChecksObservedEvidenceForRecentSentReplies(t *testing.T) {
 		t.Fatalf("empty database passed the contract check: %v", err)
 	}
 }
+
+func TestDoctorVerifyContractAndCheckSentReplies(t *testing.T) {
+	clean := Doctor{Platform: healthPlatform{}, Replies: sentReplies{}}
+	if err := clean.VerifyContract(t.Context()); err != nil {
+		t.Fatalf("clean contract failed: %v", err)
+	}
+	if checked, err := clean.CheckSentReplies(t.Context()); err != nil || checked != 0 {
+		t.Fatalf("zero sent replies: checked=%d err=%v", checked, err)
+	}
+
+	driftedContract := Doctor{Platform: healthPlatform{issues: []string{"SendStatus values changed"}}}
+	if err := driftedContract.VerifyContract(t.Context()); err == nil || !strings.Contains(err.Error(), "SendStatus values changed") {
+		t.Fatalf("expected contract drift error, got %v", err)
+	}
+
+	reader := sentReplies{{Outgoing: domain.Outgoing{Key: "a", Text: "plain"}, FinalID: "first"}}
+	platform := healthPlatform{messages: map[string]domain.Message{"first": {ID: "first", FromAccount: true, Text: "<p>plain</p>"}}}
+	ok := Doctor{Platform: platform, Replies: reader}
+	if checked, err := ok.CheckSentReplies(t.Context()); err != nil || checked != 1 {
+		t.Fatalf("valid sent reply: checked=%d err=%v", checked, err)
+	}
+
+	platform.messages["first"] = domain.Message{ID: "first", FromAccount: false, Text: "wrong"}
+	if checked, err := ok.CheckSentReplies(t.Context()); err == nil || checked != 1 || !strings.Contains(err.Error(), "text differs") {
+		t.Fatalf("drifted sent reply: checked=%d err=%v", checked, err)
+	}
+}

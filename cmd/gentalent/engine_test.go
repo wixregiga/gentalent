@@ -21,14 +21,15 @@ const (
 	alexID  = "member-alex"
 	blairID = "member-blair"
 	caseyID = "member-casey"
+	devonID = "member-devon"
 )
 
 var armedAt = time.Now().UTC()
 
-func testConfig(t *testing.T) config {
+func testConfig(t *testing.T) groupConfig {
 	t.Helper()
 	dir := t.TempDir()
-	return config{
+	return groupConfig{
 		ChatID: "group-chat", AccountID: "test-account", OwnerID: alexID,
 		Members: []configMember{
 			{ID: alexID, Name: "Alex", Platform: "android"},
@@ -38,6 +39,7 @@ func testConfig(t *testing.T) config {
 		NominationsDatabase: filepath.Join(dir, "nominations.sqlite3"),
 		MessagingDatabase:   filepath.Join(dir, "messaging.sqlite3"),
 		MediaDir:            filepath.Join(dir, "media"),
+		GifDir:              filepath.Join(dir, "media", "shame-gifs"),
 		PollSeconds:         1, PhotoLayout: "individual", PhotoSearchWorkers: 2,
 		GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3,
 		NameFixAgreementPercent: 100, NameFixHours: 24, WhoSearchDailyLimit: 5,
@@ -46,14 +48,14 @@ func testConfig(t *testing.T) config {
 
 type testBot struct {
 	t         *testing.T
-	cfg       config
+	cfg       groupConfig
 	chat      *fakeChat
 	agent     *blockingAgent
 	databases *workerDatabases
 	engine    *engine
 }
 
-func startBot(t *testing.T, cfg config, chat *fakeChat, agent *blockingAgent) *testBot {
+func startBot(t *testing.T, cfg groupConfig, chat *fakeChat, agent *blockingAgent) *testBot {
 	t.Helper()
 	databases, err := openWorker(t.Context(), cfg, true, time.Now)
 	if err != nil {

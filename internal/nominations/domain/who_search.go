@@ -64,7 +64,7 @@ func (g *Group) SearchWho(by MemberID, description string, at time.Time) (WhoSea
 	}
 	search := WhoSearch{Number: next.nextWhoNumber(), By: by, Description: description, StartedAt: at, Status: WhoRequested}
 	next.whoSearches = append(next.whoSearches, search)
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+	if err := errors.Join(next.EnsureGroupHasAtLeastTwoMembers(), next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return WhoSearch{}, err
 	}
@@ -81,7 +81,7 @@ func (g *Group) ClaimWhoSearches() ([]WhoSearch, error) {
 			claimed = append(claimed, *search)
 		}
 	}
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+	if err := errors.Join(next.EnsureGroupHasAtLeastTwoMembers(), next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (g *Group) ReceivePublicFigure(number WhoSearchNumber, figure PublicFigure)
 	search := &next.whoSearches[i]
 	search.Status = WhoFound
 	search.Figure = figure
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+	if err := errors.Join(next.EnsureGroupHasAtLeastTwoMembers(), next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return WhoSearch{}, err
 	}
@@ -119,7 +119,7 @@ func (g *Group) FindNoOne(number WhoSearchNumber) (WhoSearch, error) {
 	}
 	search := &next.whoSearches[i]
 	search.Status = WhoNoMatch
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+	if err := errors.Join(next.EnsureGroupHasAtLeastTwoMembers(), next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return WhoSearch{}, err
 	}
@@ -134,7 +134,7 @@ func (g *Group) FailWhoSearch(number WhoSearchNumber) (WhoSearch, error) {
 	}
 	search := &next.whoSearches[i]
 	search.Status = WhoFailed
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+	if err := errors.Join(next.EnsureGroupHasAtLeastTwoMembers(), next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return WhoSearch{}, err
 	}
@@ -151,7 +151,7 @@ func (g *Group) AbandonInterruptedWhoSearches() ([]WhoSearch, error) {
 			abandoned = append(abandoned, *search)
 		}
 	}
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+	if err := errors.Join(next.EnsureGroupHasAtLeastTwoMembers(), next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}

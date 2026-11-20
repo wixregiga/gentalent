@@ -41,7 +41,7 @@ func TestDiscoveryPrintsTheChatMetadata(t *testing.T) {
 func TestDoctorReportsEachCheckItPassed(t *testing.T) {
 	config := capturedGroupConfig(t, observedSpec)
 	reachable := "Local Beeper API is reachable and token is accepted.\n"
-	roster := "Exact group, account, and three-person roster match.\n"
+	roster := "Exact group, account, and roster match.\n"
 	if code, out, errs := gentalent(t, "--config", config, "doctor"); code != 0 || out != reachable {
 		t.Fatalf("B193 doctor: %d %q %q", code, out, errs)
 	}
@@ -76,7 +76,7 @@ func recordSentReply(t *testing.T, config string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	databases, err := openWorker(t.Context(), cfg, true, time.Now)
+	databases, err := openWorker(t.Context(), cfg.flatGroup(), true, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

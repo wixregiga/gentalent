@@ -43,41 +43,62 @@ type feedbackJSON struct {
 	Text     string `json:"text"`
 }
 
-func readOnlyFlags(call invocation, name string, args []string) (config, bool, error) {
+func readOnlyFlags(call invocation, name string, args []string) ([]groupConfig, bool, bool, error) {
 	flags := newFlags(call, name)
 	live := flags.Bool("live", false, "use the real ballot")
+	groupFlag := flags.String("group", "", "only this configured group")
 	if _, err := parseFlags(flags, args); err != nil {
-		return config{}, false, err
+		return nil, false, false, err
 	}
 	cfg, err := loadConfig(call.config)
 	if err != nil {
-		return config{}, false, err
+		return nil, false, false, err
 	}
-	return cfg, *live, cfg.validateGroup()
+	groups, multi, err := cfg.selectGroups(*groupFlag)
+	return groups, multi, *live, err
 }
 
 func status(ctx context.Context, call invocation, args []string) error {
-	cfg, live, err := readOnlyFlags(call, "status", args)
+	groups, multi, live, err := readOnlyFlags(call, "status", args)
 	if err != nil {
 		return err
 	}
-	nominations, closeNominations, err := openNominationsReader(ctx, cfg, live)
+	if !multi {
+		report, err := readGroupStatus(ctx, groups[0], live)
+		if err != nil {
+			return err
+		}
+		return printJSON(call.out, report)
+	}
+	reports := make(map[string]statusJSON, len(groups))
+	for _, g := range groups {
+		report, err := readGroupStatus(ctx, g, live)
+		if err != nil {
+			return prefixGroupError(g.Name, err)
+		}
+		reports[g.Name] = report
+	}
+	return printJSON(call.out, reports)
+}
+
+func readGroupStatus(ctx context.Context, g groupConfig, live bool) (statusJSON, error) {
+	nominations, closeNominations, err := openNominationsReader(ctx, g, live)
 	if err != nil {
-		return err
+		return statusJSON{}, err
 	}
 	defer closeNominations.close()
-	replies, closeMessaging, err := openMessaging(ctx, cfg.databases(live).messaging, sqlitedb.ReadOnly)
+	replies, closeMessaging, err := openMessaging(ctx, g.databases(live).messaging, sqlitedb.ReadOnly)
 	if err != nil {
-		return err
+		return statusJSON{}, err
 	}
 	defer closeMessaging.close()
 	every, err := nominations.Nominations(ctx)
 	if err != nil {
-		return err
+		return statusJSON{}, err
 	}
 	outbox, err := replies.UncertainReplies(ctx)
 	if err != nil {
-		return err
+		return statusJSON{}, err
 	}
 	report := statusJSON{Nominations: make([]nominationJSON, len(every)), Counts: outbox.Counts, Attention: make([]attentionJSON, len(outbox.Attention))}
 	for i, nomination := range every {
@@ -86,22 +107,41 @@ func status(ctx context.Context, call invocation, args []string) error {
 	for i, reply := range outbox.Attention {
 		report.Attention[i] = attentionJSON{ID: reply.Key, Status: reply.State, Kind: reply.Kind, Tag: reply.Tag, Text: reply.Text}
 	}
-	return printJSON(call.out, report)
+	return report, nil
 }
 
 func feedback(ctx context.Context, call invocation, args []string) error {
-	cfg, live, err := readOnlyFlags(call, "feedback", args)
+	groups, multi, live, err := readOnlyFlags(call, "feedback", args)
 	if err != nil {
 		return err
 	}
-	nominations, closers, err := openNominationsReader(ctx, cfg, live)
+	if !multi {
+		shown, err := readGroupFeedback(ctx, groups[0], live)
+		if err != nil {
+			return err
+		}
+		return printJSON(call.out, shown)
+	}
+	reports := make(map[string][]feedbackJSON, len(groups))
+	for _, g := range groups {
+		shown, err := readGroupFeedback(ctx, g, live)
+		if err != nil {
+			return prefixGroupError(g.Name, err)
+		}
+		reports[g.Name] = shown
+	}
+	return printJSON(call.out, reports)
+}
+
+func readGroupFeedback(ctx context.Context, g groupConfig, live bool) ([]feedbackJSON, error) {
+	nominations, closers, err := openNominationsReader(ctx, g, live)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer closers.close()
 	entries, err := nominations.Feedback(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	shown := make([]feedbackJSON, len(entries))
 	for i, entry := range entries {
@@ -110,30 +150,56 @@ func feedback(ctx context.Context, call invocation, args []string) error {
 			shown[i].SaidAt = entry.SaidAt.UTC().Format(time.RFC3339Nano)
 		}
 	}
-	return printJSON(call.out, shown)
+	return shown, nil
 }
 
 func busy(ctx context.Context, call invocation, args []string) error {
-	cfg, live, err := readOnlyFlags(call, "busy", args)
+	groups, multi, live, err := readOnlyFlags(call, "busy", args)
 	if err != nil {
 		return err
 	}
-	nominations, closers, err := openNominationsReader(ctx, cfg, live)
+	var allRunning []string
+	for _, g := range groups {
+		running, err := groupBusy(ctx, g, live)
+		if err != nil {
+			return prefixGroupError(g.Name, err)
+		}
+		if len(running) == 0 {
+			continue
+		}
+		if multi {
+			allRunning = append(allRunning, fmt.Sprintf("%s (%s)", g.Name, strings.Join(running, " and ")))
+		} else {
+			allRunning = append(allRunning, running...)
+		}
+	}
+	if len(allRunning) > 0 {
+		separator := " and "
+		if multi {
+			separator = "; "
+		}
+		return fmt.Errorf("%s are running; a restart now would abandon them", strings.Join(allRunning, separator))
+	}
+	fmt.Fprintln(call.out, "No AI search is running.")
+	return nil
+}
+
+func groupBusy(ctx context.Context, g groupConfig, live bool) ([]string, error) {
+	nominations, closers, err := openNominationsReader(ctx, g, live)
 	if errors.Is(err, fs.ErrNotExist) {
-		fmt.Fprintln(call.out, "No AI search is running.")
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer closers.close()
 	photos, err := nominations.SearchesRunning(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	who, err := nominations.WhoSearchesRunning(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var running []string
 	if len(photos) > 0 {
@@ -142,11 +208,7 @@ func busy(ctx context.Context, call invocation, args []string) error {
 	if len(who) > 0 {
 		running = append(running, "who searches "+numbered(who))
 	}
-	if len(running) > 0 {
-		return fmt.Errorf("%s are running; a restart now would abandon them", strings.Join(running, " and "))
-	}
-	fmt.Fprintln(call.out, "No AI search is running.")
-	return nil
+	return running, nil
 }
 
 func numbered(numbers []int) string {
@@ -162,6 +224,7 @@ func resolveSend(ctx context.Context, call invocation, args []string) error {
 	messageID := flags.String("message-id", "", "Beeper message ID that delivered this reply; verified against Beeper")
 	notDelivered := flags.Bool("not-delivered", false, "record that the reply never arrived; it is not resent")
 	live := flags.Bool("live", false, "use the real ballot")
+	groupFlag := flags.String("group", "", "only this configured group")
 	key, err := parseFlags(flags, args, "OUTBOX_ID")
 	if err != nil {
 		return err
@@ -173,15 +236,20 @@ func resolveSend(ctx context.Context, call invocation, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := cfg.validateGroup(); err != nil {
+	groups, multi, err := cfg.selectGroups(*groupFlag)
+	if err != nil {
 		return err
 	}
-	store, closers, err := openMessaging(ctx, cfg.databases(*live).messaging, sqlitedb.ReadWrite)
+	if multi {
+		return usageError{errors.New("resolve-send requires --group when multiple groups are configured")}
+	}
+	g := groups[0]
+	store, closers, err := openMessaging(ctx, g.databases(*live).messaging, sqlitedb.ReadWrite)
 	if err != nil {
 		return err
 	}
 	defer closers.close()
-	client, err := beeperClient(cfg, cfg.group())
+	client, err := beeperClient(cfg, g.group())
 	if err != nil {
 		return err
 	}

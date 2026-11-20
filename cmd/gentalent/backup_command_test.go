@@ -23,7 +23,7 @@ func TestBackupCopiesEachExistingDatabaseBesideIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	databases, err := openWorker(t.Context(), cfg, true, time.Now)
+	databases, err := openWorker(t.Context(), cfg.flatGroup(), true, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

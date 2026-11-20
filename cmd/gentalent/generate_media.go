@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"time"
 
@@ -28,6 +29,9 @@ func generateMedia(ctx context.Context, call invocation, args []string) error {
 	cfg, err := loadConfig(call.config)
 	if err != nil {
 		return err
+	}
+	if cfg.MediaDir == "" {
+		return errors.New("media_dir is required")
 	}
 	ai, err := aiPrograms(cfg, *cli)
 	if err != nil {

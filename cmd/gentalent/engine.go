@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	aicommand "gentalent/internal/ai/app/command"
@@ -43,7 +44,11 @@ type aiAgents struct {
 	identifier *aicommand.Identifier
 }
 
-func newEngine(cfg config, w *workerDatabases, p platform, ai aiAgents, log *slog.Logger) *engine {
+func newEngine(cfg groupConfig, w *workerDatabases, p platform, ai aiAgents, log *slog.Logger) *engine {
+	return newEngineWithSlots(cfg, w, p, ai, nil, nil, log)
+}
+
+func newEngineWithSlots(cfg groupConfig, w *workerDatabases, p platform, ai aiAgents, photoSlots, whoSlots chan struct{}, log *slog.Logger) *engine {
 	group := cfg.group()
 	return &engine{
 		bot:       w.bot,
@@ -52,12 +57,35 @@ func newEngine(cfg config, w *workerDatabases, p platform, ai aiAgents, log *slo
 		replies:   mcommand.Enqueuer{Store: w.inbox},
 		reactions: mquery.ReactionReader{Replies: w.inbox, Platform: p.reader, Group: group},
 		flusher:   mcommand.Flusher{Store: w.inbox, Sender: p.sender, Reader: p.delivery, Log: log},
-		photos:    newPhotoSearches(ai.finder, cfg.PhotoSearchWorkers, log),
-		who:       newWhoSearches(ai.identifier, cfg.PhotoSearchWorkers, log),
+		photos:    newPhotoSearchesWithSlots(ai.finder, cfg.PhotoSearchWorkers, photoSlots, log),
+		who:       newWhoSearchesWithSlots(ai.identifier, cfg.PhotoSearchWorkers, whoSlots, log),
 		pollEvery: cfg.pollEvery(),
 		now:       w.now,
 		log:       log,
 	}
+}
+
+func runEngines(ctx context.Context, engines []*engine, names []string, once bool) error {
+	if len(engines) == 1 {
+		return prefixGroupError(names[0], engines[0].run(ctx, once))
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	errs := make([]error, len(engines))
+	var group sync.WaitGroup
+	for i, e := range engines {
+		group.Go(func() {
+			err := e.run(runCtx, once)
+			if err != nil {
+				errs[i] = prefixGroupError(names[i], err)
+				if !once {
+					cancel()
+				}
+			}
+		})
+	}
+	group.Wait()
+	return errors.Join(errs...)
 }
 
 func (e *engine) run(ctx context.Context, once bool) error {

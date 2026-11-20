@@ -24,8 +24,8 @@ func (c *Client) VerifyChat(ctx context.Context) error {
 	for _, member := range group.Members {
 		expected[member] = true
 	}
-	if len(group.Members) != 3 || len(expected) != 3 || expected[""] || !expected[group.Owner] {
-		return fmt.Errorf("exactly three distinct eligible sender IDs, including the owner, are required")
+	if len(group.Members) < 2 || len(expected) != len(group.Members) || expected[""] || !expected[group.Owner] {
+		return fmt.Errorf("at least two distinct eligible sender IDs, including the owner, are required")
 	}
 	found := make(map[string]bool, len(chat.Participants.Items))
 	for _, participant := range chat.Participants.Items {
@@ -34,7 +34,7 @@ func (c *Client) VerifyChat(ctx context.Context) error {
 	withOwner := maps.Equal(found, expected)
 	delete(expected, group.Owner)
 	if !withOwner && !maps.Equal(found, expected) {
-		return fmt.Errorf("the current group roster differs from the confirmed three-person roster")
+		return fmt.Errorf("the current group roster differs from the confirmed group roster")
 	}
 	return nil
 }

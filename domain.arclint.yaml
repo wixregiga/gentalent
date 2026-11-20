@@ -19,7 +19,7 @@ contexts:
               rejected as a Generational Talent before.
             identity: NominationNumber
           Member:
-            definition: One of the three people in the Group.
+            definition: One of the people in the Group.
             identity: MemberID
           Person:
             definition: >-
@@ -73,6 +73,10 @@ contexts:
             verified_by:
               - internal/nominations/domain/name_fix_test.go:TestNameFixWindowAtLeastOneHour
               - cmd/gentalent/config_test.go:TestNameFixSettingsOutOfRangeRefuseToStartAndNameTheSetting
+          group-has-at-least-two-members:
+            statement: A Group has at least two distinct Members.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestGroupHasAtLeastTwoMembers
         assertions:
           open-nominations-within-group-limit:
             on: Nominate
@@ -130,13 +134,6 @@ contexts:
               nominates no one.
             verified_by:
               - internal/nominations/domain/group_test.go:TestMessageNominatesAllOrNone
-          votes-change-until-the-third-vote:
-            on: CastVote
-            statement: >-
-              A Member can vote, change their vote, or clear it, until the third
-              vote is in.
-            verified_by:
-              - internal/nominations/domain/vote_test.go:TestVotesChangeUntilTheThirdVote
           removed-reaction-clears-only-its-vote:
             on: CountReactions
             statement: Removing a reaction clears the vote it cast.
@@ -145,7 +142,8 @@ contexts:
           finalized-only-when-all-votes-are-in:
             on: Finalize
             statement: >-
-              A Nomination is finalized early only once all three votes are in.
+              A Nomination is finalized early only once every Member's vote is
+              in.
             verified_by:
               - internal/nominations/domain/finalize_test.go:TestFinalizedOnlyWhenAllVotesAreIn
           finalized-early-only-by-nominator:
@@ -266,6 +264,13 @@ contexts:
               Person.
             verified_by:
               - internal/nominations/domain/who_search_test.go:TestPublicFigureSpelledAsAPersonIsThatPerson
+          votes-change-until-the-last-vote:
+            on: CastVote
+            statement: >-
+              A Member can vote, change their vote, or clear it, until the last
+              vote is in.
+            verified_by:
+              - internal/nominations/domain/vote_test.go:TestVotesChangeUntilTheLastVote
     value_objects:
       CertificationStatus:
         definition: >-
@@ -275,10 +280,6 @@ contexts:
       GenerationalTalent:
         definition: >-
           A Person who has been certified through the nomination process.
-    questions:
-      group-of-any-size: >-
-        The Group is moving from exactly three Members to any number of Members.
-        Which rules that count three Members change, and how?
   messaging:
     definition: >-
       The Group's conversation, whatever platform carries it: the messages,

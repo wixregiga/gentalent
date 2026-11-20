@@ -58,14 +58,14 @@ func (g *Group) CastVote(by MemberID, ballots []Ballot, at time.Time) ([]VoteOut
 		if !found || next.nominations[i].Votes[by] == ballot.Vote {
 			continue
 		}
-		if err := next.AssertVotesChangeUntilTheThirdVote(next.nominations[i]); err != nil {
+		if err := next.AssertVotesChangeUntilTheLastVote(next.nominations[i]); err != nil {
 			return nil, err
 		}
 		outcome := next.vote(i, by, ballot.Vote, at)
 		outcome.ByCloseSpelling = byCloseSpelling(ballot.Nomination)
 		outcomes = append(outcomes, outcome)
 	}
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+	if err := errors.Join(next.EnsureGroupHasAtLeastTwoMembers(), next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}
@@ -90,12 +90,12 @@ func (g *Group) CountReactions(number NominationNumber, reactions map[MemberID]V
 		if after == NotVoted && next.AssertRemovedReactionClearsOnlyItsVote(*nomination, member.ID, before) != nil {
 			continue
 		}
-		if nomination.Votes[member.ID] == after || next.AssertVotesChangeUntilTheThirdVote(*nomination) != nil {
+		if nomination.Votes[member.ID] == after || next.AssertVotesChangeUntilTheLastVote(*nomination) != nil {
 			continue
 		}
 		outcomes = append(outcomes, next.vote(i, member.ID, after, at))
 	}
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+	if err := errors.Join(next.EnsureGroupHasAtLeastTwoMembers(), next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}
@@ -128,9 +128,9 @@ func (g *Group) AssertCloseSpellingNamesOneNomination(ref Ref) error {
 	return nil
 }
 
-func (g *Group) AssertVotesChangeUntilTheThirdVote(nomination Nomination) error {
+func (g *Group) AssertVotesChangeUntilTheLastVote(nomination Nomination) error {
 	if nomination.Locked() {
-		return Refusal{Rule: VotesChangeUntilTheThirdVote, Numbers: []NominationNumber{nomination.Number}}
+		return Refusal{Rule: VotesChangeUntilTheLastVote, Numbers: []NominationNumber{nomination.Number}}
 	}
 	return nil
 }

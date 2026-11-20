@@ -70,7 +70,7 @@ func (g *Group) Nominate(by MemberID, candidates []Candidate, at time.Time) ([]N
 		next.persons[people[k]] = Person{ID: people[k], Name: candidate.Name, Spellings: []Spelling{candidate.Spelling}}
 		nominated[k] = NominateOutcome{Number: next.openNomination(by, people[k], candidate, at).Number}
 	}
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+	if err := errors.Join(next.EnsureGroupHasAtLeastTwoMembers(), next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func (g *Group) Renominate(by MemberID, candidates []Candidate, at time.Time) ([
 	for k, candidate := range candidates {
 		renominated = append(renominated, next.openNomination(by, people[k], candidate, at))
 	}
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+	if err := errors.Join(next.EnsureGroupHasAtLeastTwoMembers(), next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}

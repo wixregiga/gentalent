@@ -56,6 +56,31 @@ func TestFinalizedOnlyWhenAllVotesAreIn(t *testing.T) {
 	if got, err := nothing.Finalize(alex.ID, nil, today); err != nil || len(got) != 0 {
 		t.Fatalf("B80 a bare !final with nothing open is silent, got %+v, %v", got, err)
 	}
+
+	four, err := domain.NewGroup("group-four", []domain.MemberID{alex.ID, blair.ID, casey.ID, devon.ID}, severalAtOnce, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("four-member group: %v", err)
+	}
+	if _, err := four.Nominate(alex.ID, candidates(ada), today); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := four.CastVote(blair.ID, []domain.Ballot{{Vote: domain.Yes}}, today); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := four.CastVote(casey.ID, []domain.Ballot{{Vote: domain.Yes}}, today); err != nil {
+		t.Fatal(err)
+	}
+	_, err = four.Finalize(alex.ID, nil, today)
+	refused = refusal(t, err, domain.FinalizedOnlyWhenAllVotesAreIn)
+	wantNumbers(t, refused.Numbers, 1)
+
+	if _, err := four.CastVote(devon.ID, []domain.Ballot{{Vote: domain.Yes}}, today); err != nil {
+		t.Fatal(err)
+	}
+	done, err := four.Finalize(alex.ID, nil, today)
+	if err != nil || len(done) != 1 || done[0].Status != domain.Certified {
+		t.Fatalf("want Nomination 1 certified after fourth vote, got %+v, %v", done, err)
+	}
 }
 
 func TestFinalizedEarlyOnlyByNominator(t *testing.T) {

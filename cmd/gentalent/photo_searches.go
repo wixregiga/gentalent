@@ -21,7 +21,14 @@ type searches[S, R any] struct {
 }
 
 func newSearches[S, R any](workers int, run func(context.Context, S) R, interrupted func(S, error) R) searches[S, R] {
-	return searches[S, R]{run: run, interrupted: interrupted, slots: make(chan struct{}, workers), results: make(chan R), group: &sync.WaitGroup{}}
+	return newSearchesWithSlots(workers, nil, run, interrupted)
+}
+
+func newSearchesWithSlots[S, R any](workers int, slots chan struct{}, run func(context.Context, S) R, interrupted func(S, error) R) searches[S, R] {
+	if slots == nil {
+		slots = make(chan struct{}, workers)
+	}
+	return searches[S, R]{run: run, interrupted: interrupted, slots: slots, results: make(chan R), group: &sync.WaitGroup{}}
 }
 
 func (s *searches[S, R]) start(ctx context.Context, search S) {
@@ -53,6 +60,10 @@ func (s *searches[S, R]) stop(cancel context.CancelFunc) {
 type photoSearches = searches[chat.PhotoSearch, chat.PhotoResult]
 
 func newPhotoSearches(finder *aicommand.Finder, workers int, log *slog.Logger) photoSearches {
+	return newPhotoSearchesWithSlots(finder, workers, nil, log)
+}
+
+func newPhotoSearchesWithSlots(finder *aicommand.Finder, workers int, slots chan struct{}, log *slog.Logger) photoSearches {
 	run := func(ctx context.Context, search chat.PhotoSearch) chat.PhotoResult {
 		found, err := finder.Find(ctx, aidomain.Subject{Name: search.Person, Pitch: search.Pitch, Dir: search.Dir})
 		if err != nil {
@@ -67,5 +78,5 @@ func newPhotoSearches(finder *aicommand.Finder, workers int, log *slog.Logger) p
 	interrupted := func(search chat.PhotoSearch, err error) chat.PhotoResult {
 		return chat.PhotoResult{Nomination: search.Nomination, Failure: err.Error()}
 	}
-	return newSearches(workers, run, interrupted)
+	return newSearchesWithSlots(workers, slots, run, interrupted)
 }

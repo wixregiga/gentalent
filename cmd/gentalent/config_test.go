@@ -75,7 +75,7 @@ func TestEveryInvalidSettingNamesItsKey(t *testing.T) {
 		{"chat_id", func(v map[string]any) { v["chat_id"] = "REPLACE_WITH_UNMERGED_CHAT_ID" }},
 		{"account_id", func(v map[string]any) { delete(v, "account_id") }},
 		{"owner_id", func(v map[string]any) { v["owner_id"] = "member-outsider" }},
-		{"members", func(v map[string]any) { v["members"] = v["members"].([]map[string]string)[:2] }},
+		{"members", func(v map[string]any) { v["members"] = v["members"].([]map[string]string)[:1] }},
 		{"members", func(v map[string]any) { v["members"].([]map[string]string)[1]["platform"] = "pager" }},
 		{"members", func(v map[string]any) { v["members"].([]map[string]string)[2]["name"] = " " }},
 		{"photo_layout", func(v map[string]any) { v["photo_layout"] = "grid" }},
@@ -139,12 +139,12 @@ func TestALimitBelowOneRefusesToStartAndNamesTheSetting(t *testing.T) {
 
 func TestNameFixSettingsOutOfRangeRefuseToStartAndNameTheSetting(t *testing.T) {
 	for _, tc := range []struct {
-		change func(*config)
+		change func(*groupConfig)
 		want   string
 	}{
-		{func(c *config) { c.NameFixAgreementPercent = 0 }, "name_fix_agreement_percent is 0"},
-		{func(c *config) { c.NameFixAgreementPercent = 101 }, "name_fix_agreement_percent is 101"},
-		{func(c *config) { c.NameFixHours = 0 }, "name_fix_hours is 0"},
+		{func(c *groupConfig) { c.NameFixAgreementPercent = 0 }, "name_fix_agreement_percent is 0"},
+		{func(c *groupConfig) { c.NameFixAgreementPercent = 101 }, "name_fix_agreement_percent is 101"},
+		{func(c *groupConfig) { c.NameFixHours = 0 }, "name_fix_hours is 0"},
 	} {
 		cfg := testConfig(t)
 		tc.change(&cfg)
@@ -179,5 +179,25 @@ func TestNameFixesDefaultOffWithEveryMemberAndADay(t *testing.T) {
 	settings := cfg.settings()
 	if settings.AllowNameFixes || settings.NameFixAgreementPercentage != 100 || settings.NameFixWindow != 24*time.Hour {
 		t.Fatalf("name fix defaults: %+v", settings)
+	}
+}
+
+func TestFlatConfigAcceptsTwoAndFourMemberRosters(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		members []map[string]string
+	}{
+		{"two members", []map[string]string{{"id": alexID, "name": "Alex", "platform": "android"}, {"id": blairID, "name": "Blair", "platform": "iphone"}}},
+		{"four members", []map[string]string{{"id": alexID, "name": "Alex", "platform": "android"}, {"id": blairID, "name": "Blair", "platform": "iphone"}, {"id": caseyID, "name": "Casey", "platform": "unknown"}, {"id": devonID, "name": "Devon", "platform": "android"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := loadConfig(writeConfig(t, t.TempDir(), func(v map[string]any) { v["members"] = tc.members }))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := cfg.validateGroup(); err != nil {
+				t.Fatalf("roster %s refused: %v", tc.name, err)
+			}
+		})
 	}
 }

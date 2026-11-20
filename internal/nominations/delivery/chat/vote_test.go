@@ -353,3 +353,29 @@ func TestOneOpenNominationNeedsNoCloseSpelling(t *testing.T) {
 		t.Fatalf("with one open Nomination a vote counts without a guess, got %q", got)
 	}
 }
+
+func TestVoteRepliesForTwoAndFourMemberGroups(t *testing.T) {
+	four := newRosterHarness(t, []chat.Member{alex, blair, casey, devon}, oneAtATime)
+	four.send(alex, "!gt Juno Vale. Pitch")
+	if got := four.say(blair, "!!Y"); !strings.Contains(got, "2/4 votes in.") || strings.Contains(got, "Result in 1 minute") {
+		t.Fatalf("second vote in four-member group: %q", got)
+	}
+	if got := four.say(casey, "!!Y"); !strings.Contains(got, "3/4 votes in.") || strings.Contains(got, "Result in 1 minute") {
+		t.Fatalf("third vote in four-member group must not lock: %q", got)
+	}
+	if got := four.say(devon, "!!Y"); got != "@Devon has voted for Juno Vale (#1) to be a generational talent!  \n4/4 votes in. Result in 1 minute.  \nFinish now: !final (@Alex)" {
+		t.Fatalf("fourth vote in four-member group must lock: %q", got)
+	}
+	if got := four.say(blair, "!!N"); got != "Voting is locked: 4/4 votes are in on Juno Vale (#1).  \nResult in under a minute, or @Alex can send !final." {
+		t.Fatalf("post-lock vote in four-member group: %q", got)
+	}
+
+	two := newRosterHarness(t, []chat.Member{alex, blair}, oneAtATime)
+	two.send(alex, "!gt Juno Vale. Pitch")
+	if got := two.say(blair, "!!Y"); got != "@Blair has voted for Juno Vale (#1) to be a generational talent!  \n2/2 votes in. Result in 1 minute.  \nFinish now: !final (@Alex)" {
+		t.Fatalf("second vote in two-member group must lock: %q", got)
+	}
+	if got := two.say(blair, "!!N"); got != "Voting is locked: 2/2 votes are in on Juno Vale (#1).  \nResult in under a minute, or @Alex can send !final." {
+		t.Fatalf("post-lock vote in two-member group: %q", got)
+	}
+}

@@ -61,7 +61,7 @@ func NewGroup(id GroupID, members []MemberID, settings Settings, persons []Perso
 	}
 	slices.SortFunc(group.nameFixes, func(a, b NameFix) int { return int(a.Number - b.Number) })
 	slices.SortFunc(group.whoSearches, func(a, b WhoSearch) int { return int(a.Number - b.Number) })
-	if err := errors.Join(group.EnsureNominationLimitNotLessThanOne(), group.EnsureOneOpenNominationPerPerson(), group.EnsureCertifiedByUnanimousYes(),
+	if err := errors.Join(group.EnsureGroupHasAtLeastTwoMembers(), group.EnsureNominationLimitNotLessThanOne(), group.EnsureOneOpenNominationPerPerson(), group.EnsureCertifiedByUnanimousYes(),
 		group.EnsureOnePendingNameFixPerPerson(), group.EnsureNameFixAgreementPercentageWithinRange(), group.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
 	}
@@ -150,6 +150,20 @@ func (g *Group) GifUses() map[string]int {
 		}
 	}
 	return uses
+}
+
+func (g *Group) EnsureGroupHasAtLeastTwoMembers() error {
+	if len(g.members) < 2 {
+		return Refusal{Rule: GroupHasAtLeastTwoMembers}
+	}
+	seen := make(map[MemberID]bool, len(g.members))
+	for _, member := range g.members {
+		if member.ID == "" || seen[member.ID] {
+			return Refusal{Rule: GroupHasAtLeastTwoMembers}
+		}
+		seen[member.ID] = true
+	}
+	return nil
 }
 
 func (g *Group) EnsureNominationLimitNotLessThanOne() error {

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -18,9 +19,14 @@ const verifiedChat = `{"id":"group/one","accountID":"demo-account","type":"group
 
 func testClient(t *testing.T, h http.HandlerFunc) *Client {
 	t.Helper()
+	return testClientForGroup(t, domain.Group{ChatID: "group/one", AccountID: "demo-account", Owner: "alex", Members: []string{"alex", "blair", "casey"}}, h)
+}
+
+func testClientForGroup(t *testing.T, group domain.Group, h http.HandlerFunc) *Client {
+	t.Helper()
 	server := httptest.NewServer(h)
 	t.Cleanup(server.Close)
-	client, err := New(server.URL, "test-token", domain.Group{ChatID: "group/one", AccountID: "demo-account", Owner: "alex", Members: []string{"alex", "blair", "casey"}})
+	client, err := New(server.URL, "test-token", group)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,6 +203,42 @@ func TestSendRequiresScopedPendingIDInResponse(t *testing.T) {
 			})
 			if receipt, err := client.Send(t.Context(), domain.Outgoing{Text: "reply"}); err == nil || receipt.PendingID != "" {
 				t.Fatalf("invalid confirmation = %+v, %v", receipt, err)
+			}
+		})
+	}
+}
+
+func TestVerifyChatAllowsTwoOrMoreDistinctMembersAndRefusesInvalidRosters(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		members      []string
+		participants string
+		wantErr      string
+	}{
+		{"two members without owner in participants", []string{"alex", "blair"}, `[{"id":"blair"}]`, ""},
+		{"two members with owner in participants", []string{"alex", "blair"}, `[{"id":"alex"},{"id":"blair"}]`, ""},
+		{"four members without owner in participants", []string{"alex", "blair", "casey", "devon"}, `[{"id":"blair"},{"id":"casey"},{"id":"devon"}]`, ""},
+		{"four members with owner in participants", []string{"alex", "blair", "casey", "devon"}, `[{"id":"alex"},{"id":"blair"},{"id":"casey"},{"id":"devon"}]`, ""},
+		{"zero members", nil, `[{"id":"blair"}]`, "at least two distinct eligible sender IDs"},
+		{"one member", []string{"alex"}, `[{"id":"alex"}]`, "at least two distinct eligible sender IDs"},
+		{"duplicate member", []string{"alex", "blair", "alex"}, `[{"id":"alex"},{"id":"blair"}]`, "at least two distinct eligible sender IDs"},
+		{"missing owner in roster", []string{"blair", "casey"}, `[{"id":"blair"},{"id":"casey"}]`, "at least two distinct eligible sender IDs"},
+		{"mismatched participant set", []string{"alex", "blair", "casey"}, `[{"id":"blair"},{"id":"devon"}]`, "confirmed group roster"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testClientForGroup(t, domain.Group{ChatID: "group/one", AccountID: "demo-account", Owner: "alex", Members: tc.members}, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprintf(w, `{"id":"group/one","accountID":"demo-account","type":"group","participants":{"hasMore":false,"items":%s}}`, tc.participants)
+			})
+			err := client.VerifyChat(t.Context())
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("want valid chat, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("want error containing %q, got %v", tc.wantErr, err)
 			}
 		})
 	}

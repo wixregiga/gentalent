@@ -49,7 +49,7 @@ func (g *Group) Shame(shame Shame, about Ref) (Shame, error) {
 	shame.Nomination = nomination.Number
 	shame.TargetVote = nomination.Votes[shame.Target]
 	next.shames = append(next.shames, shame)
-	if err := errors.Join(next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
+	if err := errors.Join(next.EnsureGroupHasAtLeastTwoMembers(), next.EnsureNominationLimitNotLessThanOne(), next.EnsureOneOpenNominationPerPerson(), next.EnsureCertifiedByUnanimousYes(),
 		next.EnsureOnePendingNameFixPerPerson(), next.EnsureNameFixAgreementPercentageWithinRange(), next.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return Shame{}, err
 	}

@@ -18,7 +18,7 @@ func vote(t *testing.T, group *domain.Group, member member, choice domain.Vote) 
 	return outcomes
 }
 
-func TestVotesChangeUntilTheThirdVote(t *testing.T) {
+func TestVotesChangeUntilTheLastVote(t *testing.T) {
 	group := newGroup(t, oneAtATime, open(1, ada, alex))
 
 	if got := vote(t, group, blair, domain.No); len(got) != 1 || got[0].Change != domain.VoteRecorded {
@@ -36,19 +36,56 @@ func TestVotesChangeUntilTheThirdVote(t *testing.T) {
 	vote(t, group, alex, domain.Yes)
 	locking := vote(t, group, casey, domain.No)
 	if len(locking) != 1 || !locking[0].Locks || nomination(t, group, 1).LockedAt != today {
-		t.Fatalf("B65 the third vote locks the Nomination at its time, got %+v", locking)
+		t.Fatalf("B65 the last vote locks the Nomination at its time, got %+v", locking)
 	}
 
 	before := snapshot(group)
 	for _, choice := range []domain.Vote{domain.No, domain.NotVoted} {
 		_, err := group.CastVote(blair.ID, []domain.Ballot{{Vote: choice}}, today)
-		refused := refusal(t, err, domain.VotesChangeUntilTheThirdVote)
+		refused := refusal(t, err, domain.VotesChangeUntilTheLastVote)
 		wantNumbers(t, refused.Numbers, 1)
 	}
 	if got := vote(t, group, blair, domain.Yes); len(got) != 0 {
 		t.Fatalf("B58 repeating your vote after the lock is silent, got %+v", got)
 	}
 	wantUnchanged(t, group, before)
+
+	four, err := domain.NewGroup("group-four", []domain.MemberID{alex.ID, blair.ID, casey.ID, devon.ID}, oneAtATime, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("four-member group: %v", err)
+	}
+	if _, err := four.Nominate(alex.ID, candidates(ada), today); err != nil {
+		t.Fatal(err)
+	}
+	vote(t, four, blair, domain.Yes)
+	if third := vote(t, four, casey, domain.Yes); len(third) != 1 || third[0].Locks || !nomination(t, four, 1).LockedAt.IsZero() {
+		t.Fatalf("the third vote in a four-Member Group must not lock, got %+v", third)
+	}
+	if changed := vote(t, four, blair, domain.No); len(changed) != 1 || changed[0].Change != domain.VoteChanged {
+		t.Fatalf("before the fourth vote, a Member may change their vote, got %+v", changed)
+	}
+	if cleared := vote(t, four, casey, domain.NotVoted); len(cleared) != 1 || cleared[0].Change != domain.VoteCleared {
+		t.Fatalf("before the fourth vote, a Member may clear their vote, got %+v", cleared)
+	}
+	vote(t, four, casey, domain.Yes)
+	if fourth := vote(t, four, devon, domain.Yes); len(fourth) != 1 || !fourth[0].Locks || nomination(t, four, 1).LockedAt != today {
+		t.Fatalf("the fourth vote locks the four-Member Group, got %+v", fourth)
+	}
+	_, err = four.CastVote(blair.ID, []domain.Ballot{{Vote: domain.Yes}}, today)
+	refusal(t, err, domain.VotesChangeUntilTheLastVote)
+
+	two, err := domain.NewGroup("group-two", []domain.MemberID{alex.ID, blair.ID}, oneAtATime, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("two-member group: %v", err)
+	}
+	if _, err := two.Nominate(alex.ID, candidates(ada), today); err != nil {
+		t.Fatal(err)
+	}
+	if second := vote(t, two, blair, domain.Yes); len(second) != 1 || !second[0].Locks {
+		t.Fatalf("the second vote locks the two-Member Group, got %+v", second)
+	}
+	_, err = two.CastVote(blair.ID, []domain.Ballot{{Vote: domain.No}}, today)
+	refusal(t, err, domain.VotesChangeUntilTheLastVote)
 }
 
 func TestRepeatedVotesAndEmptyClearsAreSilent(t *testing.T) {

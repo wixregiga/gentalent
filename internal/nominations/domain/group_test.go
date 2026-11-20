@@ -20,6 +20,7 @@ var (
 	alex      = member{ID: "member-alex", Name: "Alex"}
 	blair     = member{ID: "member-blair", Name: "Blair"}
 	casey     = member{ID: "member-casey", Name: "Casey"}
+	devon     = member{ID: "member-devon", Name: "Devon"}
 	members   = []member{alex, blair, casey}
 	memberIDs = []domain.MemberID{alex.ID, blair.ID, casey.ID}
 
@@ -161,6 +162,34 @@ func nomination(t *testing.T, group *domain.Group, number domain.NominationNumbe
 		t.Fatalf("Nomination %d does not exist", number)
 	}
 	return found
+}
+
+func TestGroupHasAtLeastTwoMembers(t *testing.T) {
+	valid := domain.Settings{GroupOpenNominationLimit: 1, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 1, NameFixAgreementPercentage: 100, NameFixWindow: 24 * time.Hour}
+	for _, tc := range []struct {
+		name    string
+		roster  []domain.MemberID
+		allowed bool
+	}{
+		{"none", nil, false},
+		{"one member", []domain.MemberID{alex.ID}, false},
+		{"two identical members", []domain.MemberID{alex.ID, alex.ID}, false},
+		{"duplicate among three", []domain.MemberID{alex.ID, blair.ID, alex.ID}, false},
+		{"blank member ID", []domain.MemberID{alex.ID, ""}, false},
+		{"two distinct members", []domain.MemberID{alex.ID, blair.ID}, true},
+		{"four distinct members", []domain.MemberID{alex.ID, blair.ID, casey.ID, devon.ID}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := domain.NewGroup("group-test", tc.roster, valid, nil, nil, nil, nil, nil)
+			if tc.allowed {
+				if err != nil {
+					t.Fatalf("want Group created, got %v", err)
+				}
+				return
+			}
+			refusal(t, err, domain.GroupHasAtLeastTwoMembers)
+		})
+	}
 }
 
 func TestNominationLimitNotLessThanOne(t *testing.T) {

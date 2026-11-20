@@ -25,7 +25,11 @@ type databasePaths struct {
 }
 
 func (c config) databases(live bool) databasePaths {
-	paths := databasePaths{messaging: c.MessagingDatabase, nominations: c.NominationsDatabase}
+	return c.flatGroup().databases(live)
+}
+
+func (g groupConfig) databases(live bool) databasePaths {
+	paths := databasePaths{messaging: g.MessagingDatabase, nominations: g.NominationsDatabase}
 	if live {
 		return paths
 	}
@@ -51,7 +55,7 @@ type workerDatabases struct {
 	closers
 }
 
-func openWorker(ctx context.Context, cfg config, live bool, now func() time.Time) (opened *workerDatabases, err error) {
+func openWorker(ctx context.Context, cfg groupConfig, live bool, now func() time.Time) (opened *workerDatabases, err error) {
 	if err := errors.Join(cfg.validateGroup(), cfg.validateMedia()); err != nil {
 		return nil, err
 	}
@@ -101,11 +105,15 @@ func openWorker(ctx context.Context, cfg config, live bool, now func() time.Time
 		return nil, err
 	}
 	w.closers = append(w.closers, readSide.Close)
+	gifDir := cfg.GifDir
+	if gifDir == "" {
+		gifDir = filepath.Join(cfg.MediaDir, "shame-gifs")
+	}
 	w.bot = chat.NewBot(cfg.chat(now), chat.Ports{
 		Groups:    store,
 		Outbox:    store,
 		Feedback:  store,
-		Gifs:      files.NewGifBank(filepath.Join(cfg.MediaDir, "shame-gifs")),
+		Gifs:      files.NewGifBank(gifDir),
 		ReadPorts: readPorts(nsqlite.NewReader(readSide)),
 	})
 	return w, nil
@@ -124,7 +132,7 @@ func existingDatabase(path string) error {
 	return nil
 }
 
-func openNominationsReader(ctx context.Context, cfg config, live bool) (*chat.Reader, closers, error) {
+func openNominationsReader(ctx context.Context, cfg groupConfig, live bool) (*chat.Reader, closers, error) {
 	path := cfg.databases(live).nominations
 	if err := existingDatabase(path); err != nil {
 		return nil, nil, err

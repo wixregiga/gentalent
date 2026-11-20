@@ -1,6 +1,6 @@
 # GenTalent
 
-A bot for one three-person Google Messages group. Members nominate a "generational talent"
+A bot for Google Messages (or Beeper) group chats. Members nominate a "generational talent"
 with a keyword, everyone votes, and a unanimous yes certifies the nominee. Any no denies them
 permanently. It reads and replies through the Beeper Desktop local API, and `!!gt` uses your
 own AI subscriptions (`codex`, then `claude`, then `agy`) to attach three photos.
@@ -11,11 +11,11 @@ Replies come from the account paired with Beeper, prefixed `@gentalent-bot says:
 
 | Command | Effect |
 |---|---|
-| `!gt Name. Pitch` | Nominate. The nominator's vote counts as yes (1/3). |
+| `!gt Name. Pitch` | Nominate. |
 | `!!gt Name. Pitch` | Nominate with three AI-found photos (see Photos below). Runs AI at most once per nominee. |
-| `!!Y` / `!!N` / `!!C` (or `!!yes`, `!!no`, `!!clear`) | Vote, change your vote, or clear it, until the third vote is in. |
+| `!!Y` / `!!N` / `!!C` (or `!!yes`, `!!no`, `!!clear`) | Vote, change your vote, or clear it, until voting locks. |
 | 👍 / 👎 on the nomination announcement | Same as `!!Y` / `!!N`, any skin tone. Switching changes the vote; removing it clears the vote it cast. Silent unless `announce_reaction_votes` is `true` in `config.json`. |
-| `!final` | Nominator only, once all three votes are in. Otherwise the result posts after one minute. |
+| `!final` | Nominator only, once voting locks. Otherwise the result posts after one minute. |
 | `!gthelp` or `!!gthelp` | Rules and commands. Never runs AI. |
 | `!gtstatus` | Current nominee, who voted what, and the record. |
 | `!gtlist` / `!gtlist losers` | Certified winners (default) or denied nominees. |
@@ -24,7 +24,7 @@ Replies come from the account paired with Beeper, prefixed `@gentalent-bot says:
 | `!!gtwho description` | Ask who someone is. AI answers with one public figure, a short blurb and one photo, and says whether they are already in GenTalent. Nothing is nominated; send `!!gt` yourself. Limited per Member by `who_search_daily_limit`. |
 | `!gtfeedback idea` / `!gtsuggest idea` | Log an idea for the bot. Read them with `go run ./cmd/gentalent feedback --live`. |
 
-Messages from outside the configured group and roster, and edited, deleted or hidden
+Messages from outside the configured groups and rosters, and edited, deleted or hidden
 messages, are ignored, as are the bot's own replies.
 
 Nominees can be named the way the bot shows them, squashed (`jordanabrewster`), in any
@@ -93,9 +93,18 @@ The bot is the Go program in `cmd/gentalent` (`doc/architecture.md` is the map).
 `go run ./cmd/gentalent` lists its subcommands; `busy` exits non-zero while a photo or who search
 is running, `who "description"` runs one who search with your AI subscriptions and prints the
 answer without touching the ballot or the chat, and `backup --live --label NAME` copies both databases into `backups/` beside them.
-The bot keeps two databases, `nominations_database` and `messaging_database` in
-`config.json` (default `.state/nominations.sqlite3` and `.state/messaging.sqlite3`). It also
-reads `group_open_nomination_limit` and `member_open_nomination_limit` (default 1),
+The bot keeps two databases per group (`nominations_database` and `messaging_database` in
+`config.json`, defaulting to `.state/nominations.sqlite3` and `.state/messaging.sqlite3` for
+a single group, or `.state/groups/<name>/nominations.sqlite3` and
+`.state/groups/<name>/messaging.sqlite3` when configured in a `"groups"` array). To run
+multiple groups in one process, move `chat_id` and `members` into `"groups"` entries (each
+with a unique slug `name`, `chat_id`, and `members` of 2 or more people, optionally
+overriding `account_id`, `owner_id`, database paths, `media_dir`, or any group setting);
+omitted `media_dir` defaults to `<media_dir>/groups/<name>/` while shame GIFs stay shared
+in `<media_dir>/shame-gifs/`. Pass `--group <name>` to `run`, `arm`, `doctor`, `status`,
+`feedback`, `busy`, `backup`, or `resolve-send` to target one group (`resolve-send` requires
+`--group` when multiple groups are configured; `status` and `feedback` return JSON keyed by
+group name when no `--group` is given). It also reads `group_open_nomination_limit` and `member_open_nomination_limit` (default 1),
 `single_message_nomination_limit` (3), `allow_renomination` (false),
 `allow_name_fixes` (false), `name_fix_agreement_percent` (100, the share of Members whose
 agreement fixes a name), `name_fix_hours` (24, how long a proposed fix waits before it
@@ -133,7 +142,7 @@ observed. The send-tracking rules depend on it.
    token in `~/.config/gentalent/` (mode 600, hidden prompt).
 3. Find the group: `accounts`, `list-groups`, `find-chat "title words"`,
    `inspect-chat CHAT_ID`. Fill `config.json` with the exact chat ID, account ID, your
-   sender ID as `owner_id`, and the three members.
+   sender ID as `owner_id`, and the group members (at least two; or configure a `groups` list for multiple groups).
 4. `go run ./cmd/gentalent doctor --chat` must report an exact group and roster match.
 5. Try it without sending anything: `go run ./cmd/gentalent arm`, then
    `go run ./cmd/gentalent run`. Replies print as `PREVIEW:` and use a separate dry-run
@@ -146,10 +155,10 @@ observed. The send-tracking rules depend on it.
 - `config.json` (real IDs) and `.state/` (ballots, media, backups) are git-ignored.
   `config.example.json` is the template.
 - Outcomes and shames are permanent at the database level (triggers block deletes and
-  updates). Keep `.state/nominations.sqlite3` and `.state/messaging.sqlite3`; a fresh database
+  updates). Keep `.state/nominations.sqlite3` and `.state/messaging.sqlite3` (and any per-group databases under `.state/groups/`); a fresh database
   loses the record.
 - The Beeper token can read and send as your account in every chat. GenTalent limits
-  itself to one group and roster, but the token itself has no such limit.
+  itself to the configured groups and rosters, but the token itself has no such limit.
 - `!!gt` strips API-key variables before running the AI CLIs, so they use subscription
   logins only. They start in the nominee's media folder. Codex is sandboxed to it; `claude`
   and `agy` run with their permission checks turned off, so they are not confined.

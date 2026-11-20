@@ -50,7 +50,7 @@ func (w wording) refusal(r domain.Refusal) (string, bool) {
 		return fmt.Sprintf("Photos were already requested for %s (%d/%d votes in). Respond with !!Y or !!N.", w.name(first), len(nomination.Votes), members), true
 	case domain.VoteNamesItsNomination, domain.CloseSpellingNamesOneNomination:
 		return lines(append([]string{fmt.Sprintf("Several Nominations are open. Name one, e.g. !!Y %d", first)}, w.listed(r.Numbers)...)...), true
-	case domain.VotesChangeUntilTheThirdVote:
+	case domain.VotesChangeUntilTheLastVote:
 		nomination := w.nomination(first)
 		return lines(fmt.Sprintf("Voting is locked: %d/%d votes are in on %s.", members, members, w.name(first)),
 			"Result in under a minute, or "+w.member(nomination.Nominator)+" can send !final."), true

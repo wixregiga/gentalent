@@ -20,6 +20,7 @@ func backup(ctx context.Context, call invocation, args []string) error {
 	flags := newFlags(call, "backup")
 	live := flags.Bool("live", false, "back up the real ballot")
 	label := flags.String("label", "", "end of each backup's file name, such as before-abc1234")
+	groupFlag := flags.String("group", "", "only this configured group")
 	if _, err := parseFlags(flags, args); err != nil {
 		return err
 	}
@@ -30,19 +31,25 @@ func backup(ctx context.Context, call invocation, args []string) error {
 	if err != nil {
 		return err
 	}
+	groups, _, err := cfg.selectResolvedGroups(*groupFlag)
+	if err != nil {
+		return err
+	}
 	stamp := time.Now().Format("20060102-150405")
-	paths := cfg.databases(*live)
-	for _, path := range []string{paths.nominations, paths.messaging} {
-		if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
-			continue
-		} else if err != nil {
-			return err
+	for _, g := range groups {
+		paths := g.databases(*live)
+		for _, path := range []string{paths.nominations, paths.messaging} {
+			if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+				continue
+			} else if err != nil {
+				return prefixGroupError(g.Name, err)
+			}
+			destination := filepath.Join(filepath.Dir(path), "backups", fmt.Sprintf("%s-%s-%s.sqlite3", strings.TrimSuffix(filepath.Base(path), ".sqlite3"), stamp, *label))
+			if err := backupDatabase(ctx, path, destination); err != nil {
+				return prefixGroupError(g.Name, err)
+			}
+			fmt.Fprintf(call.out, "Backed up %s to %s\n", filepath.Base(path), destination)
 		}
-		destination := filepath.Join(filepath.Dir(path), "backups", fmt.Sprintf("%s-%s-%s.sqlite3", strings.TrimSuffix(filepath.Base(path), ".sqlite3"), stamp, *label))
-		if err := backupDatabase(ctx, path, destination); err != nil {
-			return err
-		}
-		fmt.Fprintf(call.out, "Backed up %s to %s\n", filepath.Base(path), destination)
 	}
 	return nil
 }

@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -16,10 +19,22 @@ import (
 	"gentalent/internal/messaging/infra/worker"
 )
 
+type lockedWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (l *lockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(p)
+}
+
 func arm(ctx context.Context, call invocation, args []string) error {
 	flags := newFlags(call, "arm")
 	ifUnarmed := flags.Bool("if-unarmed", false, "do nothing if this database is already armed")
 	live := flags.Bool("live", false, "use the real ballot")
+	groupFlag := flags.String("group", "", "only this configured group")
 	if _, err := parseFlags(flags, args); err != nil {
 		return err
 	}
@@ -27,31 +42,51 @@ func arm(ctx context.Context, call invocation, args []string) error {
 	if err != nil {
 		return err
 	}
-	databases, err := openWorker(ctx, cfg, *live, time.Now)
+	groups, multi, err := cfg.selectGroups(*groupFlag)
 	if err != nil {
 		return err
+	}
+	if err := cfg.validateAllMedia(groups); err != nil {
+		return err
+	}
+	var errs []error
+	for _, g := range groups {
+		armed, err := armGroup(ctx, cfg, g, *live, *ifUnarmed)
+		if err != nil {
+			errs = append(errs, prefixGroupError(g.Name, err))
+			continue
+		}
+		line := "Armed for new messages only. Historical commands will not be processed."
+		if !armed {
+			line = "Already armed."
+		}
+		if multi {
+			fmt.Fprintf(call.out, "%s: %s\n", g.Name, line)
+		} else {
+			fmt.Fprintln(call.out, line)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func armGroup(ctx context.Context, cfg config, g groupConfig, live, ifUnarmed bool) (bool, error) {
+	databases, err := openWorker(ctx, g, live, time.Now)
+	if err != nil {
+		return false, err
 	}
 	defer databases.close()
-	client, err := beeperClient(cfg, cfg.group())
+	client, err := beeperClient(cfg, g.group())
 	if err != nil {
-		return err
+		return false, err
 	}
-	armed, err := mcommand.Armer{Platform: client, Store: databases.inbox}.Arm(ctx, *ifUnarmed)
-	if err != nil {
-		return err
-	}
-	if !armed {
-		fmt.Fprintln(call.out, "Already armed.")
-		return nil
-	}
-	fmt.Fprintln(call.out, "Armed for new messages only. Historical commands will not be processed.")
-	return nil
+	return mcommand.Armer{Platform: client, Store: databases.inbox}.Arm(ctx, ifUnarmed)
 }
 
 func runBot(ctx context.Context, call invocation, args []string) error {
 	flags := newFlags(call, "run")
 	once := flags.Bool("once", false, "run one poll, wait for its photo searches, and stop")
 	live := flags.Bool("live", false, "use the real ballot and send replies")
+	groupFlag := flags.String("group", "", "only this configured group")
 	if _, err := parseFlags(flags, args); err != nil {
 		return err
 	}
@@ -59,40 +94,66 @@ func runBot(ctx context.Context, call invocation, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := cfg.validateGroup(); err != nil {
+	groups, multi, err := cfg.selectGroups(*groupFlag)
+	if err != nil {
+		return err
+	}
+	if err := cfg.validateAllMedia(groups); err != nil {
 		return err
 	}
 	ai, err := aiPrograms(cfg, "")
 	if err != nil {
 		return err
 	}
+	var resources closers
+	defer resources.close()
 	if *live {
-		lock, err := worker.LockLiveGroup(worker.Binding(cfg.group()))
-		if err != nil {
-			return err
+		for _, g := range groups {
+			lock, err := worker.LockLiveGroup(worker.Binding(g.group()))
+			if err != nil {
+				return prefixGroupError(g.Name, err)
+			}
+			resources = append(resources, lock.Close)
 		}
-		defer lock.Close()
 	}
-	databases, err := openWorker(ctx, cfg, *live, time.Now)
-	if err != nil {
-		return err
+	photoSlots := make(chan struct{}, cfg.PhotoSearchWorkers)
+	whoSlots := make(chan struct{}, cfg.PhotoSearchWorkers)
+	previewOut := call.out
+	if !*live && multi {
+		previewOut = &lockedWriter{w: call.out}
 	}
-	defer databases.close()
-	client, err := beeperClient(cfg, cfg.group())
-	if err != nil {
-		return err
+	baseLog := slog.New(slog.NewTextHandler(call.errs, nil))
+	engines := make([]*engine, 0, len(groups))
+	names := make([]string, 0, len(groups))
+	for _, g := range groups {
+		databases, err := openWorker(ctx, g, *live, time.Now)
+		if err != nil {
+			return prefixGroupError(g.Name, err)
+		}
+		resources = append(resources, databases.close)
+		client, err := beeperClient(cfg, g.group())
+		if err != nil {
+			return prefixGroupError(g.Name, err)
+		}
+		on := platform{reader: client, sender: client, delivery: client}
+		if !*live {
+			on = platform{reader: client, sender: preview.Sender{Output: previewOut}}
+		}
+		groupLog := baseLog
+		if multi {
+			groupLog = baseLog.With("group", g.Name)
+		}
+		engines = append(engines, newEngineWithSlots(g, databases, on, ai, photoSlots, whoSlots, groupLog))
+		names = append(names, g.Name)
 	}
-	on := platform{reader: client, sender: client, delivery: client}
 	mode := "LIVE replies enabled."
 	if !*live {
-		on = platform{reader: client, sender: preview.Sender{Output: call.out}}
 		mode = "DRY RUN: isolated ballot, previews only."
 	}
 	fmt.Fprintln(call.out, mode)
 	stopping, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	log := slog.New(slog.NewTextHandler(call.errs, nil))
-	err = newEngine(cfg, databases, on, ai, log).run(stopping, *once)
+	err = runEngines(stopping, engines, names, *once)
 	if stopping.Err() != nil && ctx.Err() == nil {
 		fmt.Fprintln(call.out, "Stopped. Ballot and cursor are saved; start the same command to resume.")
 	}
@@ -100,8 +161,18 @@ func runBot(ctx context.Context, call invocation, args []string) error {
 }
 
 func aiPrograms(cfg config, only string) (aiAgents, error) {
-	if err := cfg.validateMedia(); err != nil {
-		return aiAgents{}, err
+	if len(cfg.Groups) == 0 {
+		if err := cfg.validateMedia(); err != nil {
+			return aiAgents{}, err
+		}
+	} else {
+		groups, err := cfg.resolveGroups()
+		if err != nil {
+			return aiAgents{}, err
+		}
+		if err := cfg.validateAllMedia(groups); err != nil {
+			return aiAgents{}, err
+		}
 	}
 	providers, err := cfg.providers(only)
 	if err != nil {

@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 
 	mquery "gentalent/internal/messaging/app/query"
 	mdomain "gentalent/internal/messaging/domain"
@@ -118,8 +121,9 @@ func inspectChat(ctx context.Context, call invocation, args []string) error {
 
 func doctor(ctx context.Context, call invocation, args []string) error {
 	flags := newFlags(call, "doctor")
-	chat := flags.Bool("chat", false, "also verify the exact group, account and roster")
+	chatFlag := flags.Bool("chat", false, "also verify the exact group, account and roster")
 	contract := flags.Bool("contract", false, "also check the Beeper behavior GenTalent relies on, using recent live replies (read-only)")
+	groupFlag := flags.String("group", "", "only this configured group")
 	if _, err := parseFlags(flags, args); err != nil {
 		return err
 	}
@@ -127,37 +131,123 @@ func doctor(ctx context.Context, call invocation, args []string) error {
 	if err != nil {
 		return err
 	}
-	group := mdomain.Group{}
-	if *chat || *contract {
-		if err := cfg.validateGroup(); err != nil {
-			return err
-		}
-		group = cfg.group()
-	}
-	client, err := beeperClient(cfg, group)
-	if err != nil {
-		return err
-	}
-	checks := mquery.Doctor{Platform: client}
-	if *contract {
-		replies, closers, err := openMessaging(ctx, cfg.databases(true).messaging, sqlitedb.ReadOnly)
+	var groups []groupConfig
+	var multi bool
+	if *chatFlag || *contract || *groupFlag != "" {
+		groups, multi, err = cfg.selectGroups(*groupFlag)
 		if err != nil {
 			return err
 		}
-		defer closers.close()
-		checks.Replies = replies
 	}
-	if err := checks.Check(ctx, *chat, *contract); err != nil {
+	baseClient, err := beeperClient(cfg, mdomain.Group{})
+	if err != nil {
 		return err
 	}
+	if err := (mquery.Doctor{Platform: baseClient}).Check(ctx, false, false); err != nil {
+		return err
+	}
+	if *chatFlag || *contract {
+		var chatErrs []error
+		for _, g := range groups {
+			client, err := beeperClient(cfg, g.group())
+			if err != nil {
+				chatErrs = append(chatErrs, prefixGroupError(g.Name, err))
+				continue
+			}
+			if err := (mquery.Doctor{Platform: client}).Check(ctx, true, false); err != nil {
+				chatErrs = append(chatErrs, prefixGroupError(g.Name, err))
+			}
+		}
+		if err := errors.Join(chatErrs...); err != nil {
+			return err
+		}
+	}
+	if *contract {
+		if err := (mquery.Doctor{Platform: baseClient}).VerifyContract(ctx); err != nil {
+			return err
+		}
+		if err := checkContractReplies(ctx, cfg, groups, multi); err != nil {
+			return err
+		}
+	}
 	fmt.Fprintln(call.out, "Local Beeper API is reachable and token is accepted.")
-	if *chat || *contract {
-		fmt.Fprintln(call.out, "Exact group, account, and three-person roster match.")
+	if *chatFlag || *contract {
+		if multi {
+			fmt.Fprintf(call.out, "Exact group, account, and roster match (%d groups).\n", len(groups))
+		} else {
+			fmt.Fprintln(call.out, "Exact group, account, and roster match.")
+		}
 	}
 	if *contract {
 		fmt.Fprintln(call.out, "Beeper behavior matches doc/beeper-api.md.")
 	}
 	return nil
+}
+
+func checkContractReplies(ctx context.Context, cfg config, groups []groupConfig, multi bool) error {
+	if !multi {
+		g := groups[0]
+		replies, closers, err := openMessaging(ctx, g.databases(true).messaging, sqlitedb.ReadOnly)
+		if err != nil {
+			return err
+		}
+		defer closers.close()
+		client, err := beeperClient(cfg, g.group())
+		if err != nil {
+			return err
+		}
+		checked, err := (mquery.Doctor{Platform: client, Replies: replies}).CheckSentReplies(ctx)
+		if err != nil {
+			return err
+		}
+		if checked == 0 {
+			return errors.New("platform contract check failed: No sent replies recorded yet; message checks skipped.")
+		}
+		return nil
+	}
+	existingDBs := 0
+	totalChecked := 0
+	var errs []error
+	for _, g := range groups {
+		checked, exists, err := checkGroupSentReplies(ctx, cfg, g)
+		if exists {
+			existingDBs++
+			totalChecked += checked
+		}
+		if err != nil {
+			errs = append(errs, prefixGroupError(g.Name, err))
+		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		return err
+	}
+	if existingDBs == 0 {
+		return errors.New("no live messaging database found for any configured group")
+	}
+	if totalChecked == 0 {
+		return errors.New("platform contract check failed: No sent replies recorded yet; message checks skipped.")
+	}
+	return nil
+}
+
+func checkGroupSentReplies(ctx context.Context, cfg config, g groupConfig) (int, bool, error) {
+	path := g.databases(true).messaging
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		return 0, false, nil
+	} else if err != nil {
+		return 0, false, err
+	}
+	replies, closers, err := openMessaging(ctx, path, sqlitedb.ReadOnly)
+	if err != nil {
+		return 0, true, err
+	}
+	defer closers.close()
+	client, err := beeperClient(cfg, g.group())
+	if err != nil {
+		return 0, true, err
+	}
+	checked, err := (mquery.Doctor{Platform: client, Replies: replies}).CheckSentReplies(ctx)
+	return checked, true, err
 }
 
 type accountJSON struct {
