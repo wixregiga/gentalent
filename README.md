@@ -55,12 +55,13 @@ Two `mise` daemons start at boot (`mise.toml`): `beeper` (the Linux Beeper Deskt
 The bot runs the commit pinned in `.live/`, a git worktree, as `.live/bin/gentalent`.
 **Editing files does not change the live bot.** Only a deploy does:
 
-    mise run ship <branch>           # fast-forward main to a branch, then deploy it
+    mise run ship <branch>           # push the branch and its PR, deploy it, then move and push main
     mise run deploy                  # deploy main
     mise run deploy <commit>         # roll back to an earlier commit on main
     mise run deploy -- --check <ref> # run every check on any commit, change nothing
 
-All of these run from the main checkout only, and a real deploy takes only commits on `main`.
+All of these run from the main checkout only. A plain deploy takes only commits on `main`;
+ship deploys the branch first and moves `main` to it only once the bot stays up.
 
 A deploy runs the Go tests in a scratch checkout and `doctor --contract` against the real
 Beeper API. It refuses a commit whose startup script does not run `.live/bin/gentalent`. It
@@ -101,10 +102,10 @@ agreement fixes a name), `name_fix_hours` (24, how long a proposed fix waits bef
 lapses), `who_search_daily_limit` (5, the `!!gtwho` searches each Member may start in any
 24 hours; 0 turns them off) and `photo_search_workers` (3, the photo searches it runs at once,
 and separately the who searches); a nomination limit below one, a negative who search limit, a
-percentage outside 1 to 100 or a window under an hour refuses to start. `mise run test` runs the Go suite and the deploy script checks.
+percentage outside 1 to 100 or a window under an hour refuses to start. `mise run test` runs the Go suite and the deploy and ship script checks.
 
-Changes happen in T3 Code worktree threads and ship from the main checkout with
-`mise run ship <branch>`. Commits and pushes are scanned for personal data and secrets
+Changes happen in T3 Code worktree threads, each with a pull request, and ship from the main
+checkout with `mise run ship <branch>`, which marks the PR merged. Commits and pushes are scanned for personal data and secrets
 (`lefthook install` once per clone). See [AGENTS.md](AGENTS.md).
 
 ## When a reply is uncertain

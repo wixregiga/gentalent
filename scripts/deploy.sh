@@ -5,7 +5,8 @@
 #   mise run deploy <commit>           deploy, or roll back to, a specific commit
 #   mise run deploy -- --check [ref]   run every check, change nothing
 # Runs only from the main checkout, which owns .live, config.json and the daemons. A real
-# deploy takes only commits already on main (merge with `mise run ship <branch>`).
+# deploy takes only commits already on main. scripts/ship.sh passes --ship to deploy a branch
+# commit that fast-forwards main, and moves main to it only after this deploy succeeds.
 set -euo pipefail
 cd "$(dirname "$(realpath "$0")")/.."
 root="$PWD"
@@ -16,10 +17,11 @@ if [[ "$root" != "$common" ]]; then
 fi
 
 check_only=""
-if [[ "${1:-}" == "--check" ]]; then
-  check_only=1
-  shift
-fi
+shipping=""
+case "${1:-}" in
+  --check) check_only=1; shift ;;
+  --ship) shipping=1; shift ;;
+esac
 
 # Resolve the tools here, at the trusted repo root, so nothing depends on how mise treats the
 # mise.toml inside a scratch checkout or .live.
@@ -31,8 +33,13 @@ fi
 
 target="$(git rev-parse --verify "${1:-HEAD}^{commit}")"
 echo "Target: $(git log -1 --format='%h %s' "$target")"
-if [[ -z "$check_only" ]] && ! git merge-base --is-ancestor "$target" main; then
-  echo "${target:0:7} is not on main. Merge it first: mise run ship <branch>." >&2
+if [[ -n "$shipping" ]]; then
+  if ! git merge-base --is-ancestor main "$target"; then
+    echo "${target:0:7} does not fast-forward main, so ship could not move main to it." >&2
+    exit 1
+  fi
+elif [[ -z "$check_only" ]] && ! git merge-base --is-ancestor "$target" main; then
+  echo "${target:0:7} is not on main. Release it with: mise run ship <branch>." >&2
   exit 1
 fi
 if ! git show "$target:mise.toml" | grep -q '\./\.live/scripts/run-gentalent-live\.sh'; then

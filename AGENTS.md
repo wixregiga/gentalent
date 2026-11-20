@@ -17,15 +17,23 @@ Editing files anywhere never changes the live bot; only a deploy does.
 ## Workflow
 
 1. Work and commit in the thread's worktree, branched from `main`. `mise run test` runs the
-   Go suite and the deploy script checks and needs no config or network.
-2. From the main checkout: `mise run ship <branch>`. It fast-forwards `main`, tests the
-   commit in a scratch checkout, runs `doctor --contract` against the real Beeper API,
-   refuses while the bot is mid-operation, backs up the ballot, pins `.live`, restarts only
-   the bot, and rolls back if it does not stay up. Shipping changes what friends see in the
-   chat: do it only when the owner asks.
-3. `mise run deploy -- --check <commit>` runs every check without changing anything.
+   Go suite and the deploy and ship script checks and needs no config or network.
+2. Once the branch has commits, push it, open a pull request against `main`, and link the PR
+   to the thread (T3's `link_pull_request`). The PR is how the owner follows each thread;
+   push again after every later commit so the PR shows what will ship.
+3. From the main checkout: `mise run ship <branch>`. In order, it catches `main` up with
+   GitHub's `main`, pushes the branch, opens its PR if it has none, then deploys the branch's
+   commit: tests it in a scratch checkout, runs `doctor --contract` against the real Beeper
+   API, refuses while the bot is mid-operation, backs up the ballot, pins `.live`, restarts
+   only the bot, and rolls back if it does not stay up. Only after the bot stays up does it
+   fast-forward `main` and push it, which marks the PR merged. A failed deploy leaves `main`
+   and the PR as they were. Shipping changes what friends see in the chat: do it only when
+   the owner asks.
+4. `mise run deploy -- --check <commit>` runs every check without changing anything.
 
-Branches ship by fast-forward, so rebase onto `main` before shipping if `main` moved.
+Branches ship by fast-forward, so rebase onto `main` before shipping if `main` moved. Merge
+PRs only by shipping, never with GitHub's merge button: a merge there is not deployed, and
+its new commit leaves every open branch behind `main`.
 
 ## Never
 

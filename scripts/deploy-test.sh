@@ -92,6 +92,15 @@ printf '#!/usr/bin/env bash\nexec ./some-other-program "$@"\n' >scripts/run-gent
 git commit --quiet -am "Start some other program"
 elsewhere="$(git rev-parse HEAD)"
 git checkout --quiet main
+git checkout --quiet -b ahead
+bot fourth
+git commit --quiet -am "Fourth bot, on a branch that fast-forwards main"
+ahead="$(git rev-parse HEAD)"
+git checkout --quiet -b forked "$first"
+bot forked
+git commit --quiet -am "A bot built on an older main"
+forked="$(git rev-parse HEAD)"
+git checkout --quiet main
 
 printf '{}\n' >config.json
 mkdir -p .state
@@ -188,5 +197,17 @@ live_at "$first"
 run_deploy "$third"
 expect "the running bot's binary answers busy, not the target's, which expects a newer schema" 0 "$third" "Live bot running"
 expect_binary "the target's binary is installed after its migration-dependent busy was not asked" third
+
+live_at "$second"
+run_deploy "$ahead"
+expect "a deploy refuses a commit that is not on main" 1 "$second" "is not on main"
+
+run_deploy --ship "$forked"
+expect "a ship deploy refuses a commit that main could not fast-forward to" 1 "$second" "does not fast-forward main"
+
+run_deploy --ship "$ahead"
+expect "a ship deploy pins a branch commit that fast-forwards main" 0 "$ahead" "Live bot running"
+expect_binary "a ship deploy installs the branch commit's tested binary" fourth
+[[ "$(git rev-parse main)" == "$third" ]] || fail "the deploy moved main; only ship may, after the deploy succeeds"
 
 exit "$failures"
