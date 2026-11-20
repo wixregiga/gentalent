@@ -40,7 +40,7 @@ func testConfig(t *testing.T) config {
 		MediaDir:            filepath.Join(dir, "media"),
 		PollSeconds:         1, PhotoLayout: "individual", PhotoSearchWorkers: 2,
 		GroupOpenNominationLimit: 2, MemberOpenNominationLimit: 1, SingleMessageNominationLimit: 3,
-		NameFixAgreementPercent: 100, NameFixHours: 24,
+		NameFixAgreementPercent: 100, NameFixHours: 24, WhoSearchDailyLimit: 5,
 	}
 }
 
@@ -68,8 +68,12 @@ func startBot(t *testing.T, cfg config, chat *fakeChat, agent *blockingAgent) *t
 	if err != nil {
 		t.Fatal(err)
 	}
+	identifier, err := aicommand.NewIdentifier([]aidomain.Provider{{CLI: "fake", Model: "test"}}, map[string]aiport.WhoAgent{"fake": agent}, copyingImages{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	on := platform{reader: chat, sender: chat, delivery: chat}
-	e := newEngine(cfg, databases, on, finder, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	e := newEngine(cfg, databases, on, aiAgents{finder: finder, identifier: identifier}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	e.pollEvery = 10 * time.Millisecond
 	return &testBot{t: t, cfg: cfg, chat: chat, agent: agent, databases: databases, engine: e}
 }
@@ -101,7 +105,7 @@ func (b *testBot) waitStarted(n int) {
 		select {
 		case <-b.agent.started:
 		case <-time.After(5 * time.Second):
-			b.t.Fatal("photo search did not start")
+			b.t.Fatal("AI search did not start")
 		}
 	}
 }

@@ -25,8 +25,8 @@ internal/
     infra/preview/             the dry-run sender that prints PREVIEW: replies
     infra/files/               a sent attachment's name and size, for resolve-send
   ai/                          AI agents that do work for the Group (domain context ai)
-    domain/                    a photo search, its manifest and its result
-    app/command/               find a Person's photos
+    domain/                    a photo search, its manifest and its result; a who search's answer
+    app/command/               find a Person's photos; identify who a description fits
     port/                      the agent programs and the image tool
     infra/programs/            codex, claude, agy and the image tool
   shared/                      no product meaning; imported only by cmd, never by a hexagon
@@ -52,10 +52,10 @@ internal/
    at any step repeats only idempotent steps.
 5. **Messaging sends each reply exactly once** and tracks it (sent, uncertain, failed),
    as `doc/beeper-api.md` describes.
-6. **Photo searches run beside the lane.** A `!!gt` Nomination asks for photos. After the
-   command commits, the engine claims each requested search (at most once per Nomination),
-   runs up to `photo_search_workers` of them at once through `ai`, and hands each result
-   back to the ordered lane as a command, whose replies go out when ready.
+6. **AI searches run beside the lane.** A `!!gt` Nomination asks for photos and a `!!gtwho`
+   starts a WhoSearch. After the command commits, the engine claims each requested search
+   (once), runs up to `photo_search_workers` of each kind at once through `ai`, and hands
+   each result back to the ordered lane as a command, whose replies go out when ready.
 7. **Timers and reactions are commands too.** Each poll, the engine asks nominations to
    finalize Nominations whose minute is up, and gives it the reactions messaging read on
    each open announcement.

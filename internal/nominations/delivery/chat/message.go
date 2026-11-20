@@ -36,6 +36,23 @@ type PhotoSearch struct {
 	Dir        string
 }
 
+type WhoSearch struct {
+	Number      int
+	Description string
+	Dir         string
+}
+
+type WhoResult struct {
+	Number   int
+	Failure  string
+	NoMatch  bool
+	Name     string
+	Blurb    string
+	Source   string
+	Photo    string
+	Provider string
+}
+
 type PhotoResult struct {
 	Nomination int
 	Photos     []string

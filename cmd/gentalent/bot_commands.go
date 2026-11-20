@@ -62,7 +62,7 @@ func runBot(ctx context.Context, call invocation, args []string) error {
 	if err := cfg.validateGroup(); err != nil {
 		return err
 	}
-	finder, err := photoFinder(cfg, "")
+	ai, err := aiPrograms(cfg, "")
 	if err != nil {
 		return err
 	}
@@ -92,28 +92,32 @@ func runBot(ctx context.Context, call invocation, args []string) error {
 	stopping, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	log := slog.New(slog.NewTextHandler(call.errs, nil))
-	err = newEngine(cfg, databases, on, finder, log).run(stopping, *once)
+	err = newEngine(cfg, databases, on, ai, log).run(stopping, *once)
 	if stopping.Err() != nil && ctx.Err() == nil {
 		fmt.Fprintln(call.out, "Stopped. Ballot and cursor are saved; start the same command to resume.")
 	}
 	return err
 }
 
-func photoFinder(cfg config, only string) (*aicommand.Finder, error) {
+func aiPrograms(cfg config, only string) (aiAgents, error) {
 	if err := cfg.validateMedia(); err != nil {
-		return nil, err
+		return aiAgents{}, err
 	}
 	providers, err := cfg.providers(only)
 	if err != nil {
-		return nil, err
+		return aiAgents{}, err
 	}
 	images, err := programs.NewImageMagick()
 	if err != nil {
-		return nil, err
+		return aiAgents{}, err
 	}
 	finder, err := aicommand.NewFinder(providers, programs.Programs(), images, programs.SearchFiles{})
 	if err != nil {
-		return nil, fmt.Errorf("ai_providers: %w", err)
+		return aiAgents{}, fmt.Errorf("ai_providers: %w", err)
 	}
-	return finder, nil
+	identifier, err := aicommand.NewIdentifier(providers, programs.WhoAgents(), images)
+	if err != nil {
+		return aiAgents{}, fmt.Errorf("ai_providers: %w", err)
+	}
+	return aiAgents{finder: finder, identifier: identifier}, nil
 }

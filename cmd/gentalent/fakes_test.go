@@ -121,11 +121,12 @@ func (c *fakeChat) Send(ctx context.Context, reply mdomain.Outgoing) (port.Recei
 }
 
 type blockingAgent struct {
-	started  chan string
-	release  chan struct{}
-	mu       sync.Mutex
-	runs     int
-	canceled int
+	started    chan string
+	release    chan struct{}
+	mu         sync.Mutex
+	runs       int
+	canceled   int
+	identified int
 }
 
 func newBlockingAgent() *blockingAgent {
@@ -157,6 +158,34 @@ func (a *blockingAgent) Run(ctx context.Context, task aiport.Task) (aidomain.Man
 		photos[i] = aidomain.PhotoSource{File: name, PageURL: "https://example.test/page", ImageURL: "https://example.test/image", Caption: "Shot"}
 	}
 	return aidomain.NewManifest("Example Person", "A fictional person.", photos)
+}
+
+func (a *blockingAgent) Identify(ctx context.Context, task aiport.Task) (aidomain.WhoAnswer, error) {
+	a.mu.Lock()
+	a.identified++
+	a.mu.Unlock()
+	if err := os.MkdirAll(task.Raw, 0o700); err != nil {
+		return aidomain.WhoAnswer{}, err
+	}
+	a.started <- task.Folder
+	select {
+	case <-a.release:
+	case <-ctx.Done():
+		a.mu.Lock()
+		a.canceled++
+		a.mu.Unlock()
+		return aidomain.WhoAnswer{}, ctx.Err()
+	}
+	if err := os.WriteFile(filepath.Join(task.Raw, "photo.jpg"), []byte("raw"), 0o600); err != nil {
+		return aidomain.WhoAnswer{}, err
+	}
+	return aidomain.NewWhoAnswer(true, "Ada Lovelace", "She wrote the first published computer program.", "https://example.test/ada-lovelace", "photo.jpg")
+}
+
+func (a *blockingAgent) identifications() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.identified
 }
 
 func (a *blockingAgent) counts() (runs, canceled int) {

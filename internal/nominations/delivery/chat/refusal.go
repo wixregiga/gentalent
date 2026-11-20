@@ -93,6 +93,8 @@ func (w wording) refusal(r domain.Refusal) (string, bool) {
 		return w.pendingNameFix(r.Fix), true
 	case domain.NameUnchanged:
 		return w.name(first) + " is already spelled that way.", true
+	case domain.WhoSearchesWithinDailyLimit:
+		return w.whoLimitReached(r), true
 	case domain.NoPendingNameFix:
 		return "No fix is waiting for " + w.name(first) + ". Propose one: !gtfix " + strconv.Itoa(int(first)) + " Correct Name", true
 	}

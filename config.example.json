@@ -34,6 +34,7 @@
   "allow_name_fixes": false,
   "name_fix_agreement_percent": 100,
   "name_fix_hours": 24,
+  "who_search_daily_limit": 5,
   "photo_search_workers": 3,
   "ai_providers": [
     {"cli": "codex", "model": "gpt-6.1-sol"},

@@ -76,8 +76,8 @@ fi
 previous="$(git -C .live rev-parse HEAD 2>/dev/null || true)"
 
 if ! "$gentalent" --config "$root/config.json" busy --live; then
-  # A restart abandons a running photo search for good (it is never rerun).
-  echo "The live bot is mid-operation (a photo search is running). Try again in a few minutes." >&2
+  # A restart abandons a running photo or who search for good (it is never rerun).
+  echo "The live bot is mid-operation (an AI search is running). Try again in a few minutes." >&2
   exit 1
 fi
 

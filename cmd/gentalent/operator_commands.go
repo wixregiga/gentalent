@@ -120,26 +120,41 @@ func busy(ctx context.Context, call invocation, args []string) error {
 	}
 	nominations, closers, err := openNominationsReader(ctx, cfg, live)
 	if errors.Is(err, fs.ErrNotExist) {
-		fmt.Fprintln(call.out, "No photo search is running.")
+		fmt.Fprintln(call.out, "No AI search is running.")
 		return nil
 	}
 	if err != nil {
 		return err
 	}
 	defer closers.close()
-	running, err := nominations.SearchesRunning(ctx)
+	photos, err := nominations.SearchesRunning(ctx)
 	if err != nil {
 		return err
 	}
-	if len(running) > 0 {
-		numbers := make([]string, len(running))
-		for i, number := range running {
-			numbers[i] = strconv.Itoa(number)
-		}
-		return fmt.Errorf("photo searches are running for nominations %s; a restart now would abandon them", strings.Join(numbers, ", "))
+	who, err := nominations.WhoSearchesRunning(ctx)
+	if err != nil {
+		return err
 	}
-	fmt.Fprintln(call.out, "No photo search is running.")
+	var running []string
+	if len(photos) > 0 {
+		running = append(running, "photo searches for nominations "+numbered(photos))
+	}
+	if len(who) > 0 {
+		running = append(running, "who searches "+numbered(who))
+	}
+	if len(running) > 0 {
+		return fmt.Errorf("%s are running; a restart now would abandon them", strings.Join(running, " and "))
+	}
+	fmt.Fprintln(call.out, "No AI search is running.")
 	return nil
+}
+
+func numbered(numbers []int) string {
+	shown := make([]string, len(numbers))
+	for i, number := range numbers {
+		shown[i] = strconv.Itoa(number)
+	}
+	return strings.Join(shown, ", ")
 }
 
 func resolveSend(ctx context.Context, call invocation, args []string) error {

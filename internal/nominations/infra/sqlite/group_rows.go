@@ -10,24 +10,28 @@ import (
 	"gentalent/internal/nominations/domain"
 )
 
-func loadGroupRows(ctx context.Context, tx *sql.Tx) ([]domain.Person, []domain.Nomination, []domain.Shame, []domain.NameFix, error) {
+func loadGroupRows(ctx context.Context, tx *sql.Tx) ([]domain.Person, []domain.Nomination, []domain.Shame, []domain.NameFix, []domain.WhoSearch, error) {
 	persons, err := loadPersons(ctx, tx)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	nominations, err := loadNominations(ctx, tx)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	shames, err := loadShames(ctx, tx)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	nameFixes, err := loadNameFixes(ctx, tx)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
-	return persons, nominations, shames, nameFixes, nil
+	whoSearches, err := loadWhoSearches(ctx, tx)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	return persons, nominations, shames, nameFixes, whoSearches, nil
 }
 
 func loadNominations(ctx context.Context, tx *sql.Tx) ([]domain.Nomination, error) {
@@ -141,7 +145,7 @@ func loadShames(ctx context.Context, tx *sql.Tx) ([]domain.Shame, error) {
 }
 
 func saveGroupRows(ctx context.Context, tx *sql.Tx, persons []domain.Person, nominations []domain.Nomination, shames []domain.Shame,
-	nameFixes []domain.NameFix, group *domain.Group) error {
+	nameFixes []domain.NameFix, whoSearches []domain.WhoSearch, group *domain.Group) error {
 	if err := savePersons(ctx, tx, persons, group.Persons()); err != nil {
 		return err
 	}
@@ -168,7 +172,10 @@ func saveGroupRows(ctx context.Context, tx *sql.Tx, persons []domain.Person, nom
 			return fmt.Errorf("save shame %d: %w", s.ID, err)
 		}
 	}
-	return saveNameFixes(ctx, tx, nameFixes, group.NameFixes())
+	if err := saveNameFixes(ctx, tx, nameFixes, group.NameFixes()); err != nil {
+		return err
+	}
+	return saveWhoSearches(ctx, tx, whoSearches, group.WhoSearches())
 }
 
 func saveNomination(ctx context.Context, tx *sql.Tx, was domain.Nomination, existed bool, after domain.Nomination) error {

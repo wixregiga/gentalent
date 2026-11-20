@@ -48,7 +48,27 @@ func (r Reader) Standing(ctx context.Context) (port.Standing, error) {
 	for _, view := range searching {
 		standing.Searching = append(standing.Searching, view.Number)
 	}
+	if standing.WhoSearching, err = r.whoSearching(ctx); err != nil {
+		return port.Standing{}, err
+	}
 	return standing, nil
+}
+
+func (r Reader) whoSearching(ctx context.Context) ([]domain.WhoSearchNumber, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT number FROM who_searches WHERE status = 'searching' ORDER BY number")
+	if err != nil {
+		return nil, fmt.Errorf("read running who searches: %w", err)
+	}
+	defer rows.Close()
+	var running []domain.WhoSearchNumber
+	for rows.Next() {
+		var number domain.WhoSearchNumber
+		if err := rows.Scan(&number); err != nil {
+			return nil, fmt.Errorf("read running who searches: %w", err)
+		}
+		running = append(running, number)
+	}
+	return running, rows.Err()
 }
 
 func (r Reader) views(ctx context.Context, where string) ([]port.NominationView, error) {

@@ -69,7 +69,7 @@ func personsOf(history []domain.Nomination) []domain.Person {
 }
 
 func loaded(settings domain.Settings, history ...domain.Nomination) (*domain.Group, error) {
-	return domain.NewGroup("group-test", memberIDs, settings, personsOf(history), history, nil, nil)
+	return domain.NewGroup("group-test", memberIDs, settings, personsOf(history), history, nil, nil, nil)
 }
 
 func named(t *testing.T, group *domain.Group, id domain.PersonID) string {
@@ -140,10 +140,11 @@ func wantNumbers(t *testing.T, got []domain.NominationNumber, want ...domain.Nom
 type state struct {
 	nominations []domain.Nomination
 	shames      []domain.Shame
+	whoSearches []domain.WhoSearch
 }
 
 func snapshot(group *domain.Group) state {
-	return state{group.Nominations(), group.Shames()}
+	return state{group.Nominations(), group.Shames(), group.WhoSearches()}
 }
 
 func wantUnchanged(t *testing.T, group *domain.Group, before state) {

@@ -18,11 +18,12 @@ type NominationView struct {
 }
 
 type Standing struct {
-	Open      []NominationView
-	Latest    NominationView
-	Certified []string
-	Rejected  []string
-	Searching []domain.NominationNumber
+	Open         []NominationView
+	Latest       NominationView
+	Certified    []string
+	Rejected     []string
+	Searching    []domain.NominationNumber
+	WhoSearching []domain.WhoSearchNumber
 }
 
 type StandingReader interface {

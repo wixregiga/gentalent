@@ -10,8 +10,24 @@ import (
 type Claude struct{}
 
 func (Claude) Run(ctx context.Context, task port.Task) (domain.Manifest, error) {
-	if err := emptyRawFolder(task.Raw); err != nil {
+	output, err := runClaude(ctx, task, photoSearch)
+	if err != nil {
 		return domain.Manifest{}, err
+	}
+	return decodeManifest(output)
+}
+
+func (Claude) Identify(ctx context.Context, task port.Task) (domain.WhoAnswer, error) {
+	output, err := runClaude(ctx, task, whoSearch)
+	if err != nil {
+		return domain.WhoAnswer{}, err
+	}
+	return decodeWhoAnswer(output)
+}
+
+func runClaude(ctx context.Context, task port.Task, j job) (string, error) {
+	if err := emptyRawFolder(task.Raw); err != nil {
+		return "", err
 	}
 	args := []string{
 		"-p",
@@ -22,12 +38,12 @@ func (Claude) Run(ctx context.Context, task port.Task) (domain.Manifest, error) 
 		"--permission-mode", "bypassPermissions",
 		"--add-dir", task.Raw,
 		"--output-format", "json",
-		"--json-schema", manifestSchema,
+		"--json-schema", j.schema,
 		task.Prompt,
 	}
-	stdout, err := runProvider(ctx, "claude", task.Raw, "", args)
+	stdout, err := runProvider(ctx, "claude", task.Raw, "", args, j.timeout)
 	if err != nil {
-		return domain.Manifest{}, err
+		return "", err
 	}
-	return decodeManifest(string(stdout))
+	return string(stdout), nil
 }

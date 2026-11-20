@@ -38,6 +38,7 @@ type config struct {
 	AllowNameFixes               bool             `json:"allow_name_fixes"`
 	NameFixAgreementPercent      int              `json:"name_fix_agreement_percent"`
 	NameFixHours                 int              `json:"name_fix_hours"`
+	WhoSearchDailyLimit          int              `json:"who_search_daily_limit"`
 }
 
 type configMember struct {
@@ -77,6 +78,7 @@ func loadConfig(path string) (config, error) {
 		SingleMessageNominationLimit: 3,
 		NameFixAgreementPercent:      100,
 		NameFixHours:                 24,
+		WhoSearchDailyLimit:          5,
 		NominationsDatabase:          ".state/nominations.sqlite3",
 		MessagingDatabase:            ".state/messaging.sqlite3",
 	}
@@ -161,6 +163,9 @@ func (c config) validateMedia() error {
 	if c.PhotoSearchWorkers < 1 {
 		return fmt.Errorf("photo_search_workers is %d; it must be at least 1", c.PhotoSearchWorkers)
 	}
+	if c.WhoSearchDailyLimit < 0 {
+		return fmt.Errorf("who_search_daily_limit is %d; it must be 0 or more", c.WhoSearchDailyLimit)
+	}
 	return nil
 }
 
@@ -196,6 +201,7 @@ func (c config) settings() domain.Settings {
 		AllowNameFixes:               c.AllowNameFixes,
 		NameFixAgreementPercentage:   c.NameFixAgreementPercent,
 		NameFixWindow:                time.Duration(c.NameFixHours) * time.Hour,
+		WhoSearchDailyLimit:          c.WhoSearchDailyLimit,
 	}
 }
 

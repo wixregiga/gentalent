@@ -84,6 +84,7 @@ func TestEveryInvalidSettingNamesItsKey(t *testing.T) {
 		{"announce_reaction_votes", func(v map[string]any) { v["announce_reaction_votes"] = "yes" }},
 		{"media_dir", func(v map[string]any) { delete(v, "media_dir") }},
 		{"photo_search_workers", func(v map[string]any) { v["photo_search_workers"] = 0 }},
+		{"who_search_daily_limit", func(v map[string]any) { v["who_search_daily_limit"] = -1 }},
 		{"ai_providers", func(v map[string]any) { v["ai_providers"] = []map[string]string{{"cli": "chatbot"}} }},
 		{"ai_providers", func(v map[string]any) { delete(v, "ai_providers") }},
 	} {
@@ -93,7 +94,7 @@ func TestEveryInvalidSettingNamesItsKey(t *testing.T) {
 				err = cfg.validateGroup()
 			}
 			if err == nil {
-				_, err = photoFinder(cfg, "")
+				_, err = aiPrograms(cfg, "")
 			}
 			if err == nil || !strings.Contains(err.Error(), tc.key) {
 				t.Fatalf("D25 want an error naming %s, got %v", tc.key, err)
@@ -150,6 +151,23 @@ func TestNameFixSettingsOutOfRangeRefuseToStartAndNameTheSetting(t *testing.T) {
 		if _, err := openWorker(t.Context(), cfg, true, time.Now); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("want %q, got %v", tc.want, err)
 		}
+	}
+}
+
+func TestWhoSearchesDefaultToTheConfiguredDailyLimitAndZeroIsAllowed(t *testing.T) {
+	cfg, err := loadConfig(filepath.Join("..", "..", exampleConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if limit := cfg.settings().WhoSearchDailyLimit; limit != 5 {
+		t.Fatalf("the example config's who search daily limit is 5, got %d", limit)
+	}
+	off, err := loadConfig(writeConfig(t, t.TempDir(), func(v map[string]any) { v["who_search_daily_limit"] = 0 }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := off.validateMedia(); err != nil {
+		t.Fatalf("a who search daily limit of 0 turns who searches off and still starts: %v", err)
 	}
 }
 

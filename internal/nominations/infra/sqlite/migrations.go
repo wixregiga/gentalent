@@ -23,5 +23,11 @@ func Migrations() []func(context.Context, *sql.Tx) error {
 			}
 			return nil
 		},
+		func(ctx context.Context, tx *sql.Tx) error {
+			if _, err := tx.ExecContext(ctx, whoSearchSchema); err != nil {
+				return fmt.Errorf("create the who search schema: %w", err)
+			}
+			return nil
+		},
 	}
 }

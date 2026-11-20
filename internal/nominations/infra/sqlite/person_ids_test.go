@@ -126,6 +126,12 @@ func TestEveryPersonGetsAnOpaqueIDAndKeepsTheirBallot(t *testing.T) {
 		t.Fatalf("ids follow the order Persons were first nominated, got %v", ids)
 	}
 
+	for version := 3; version <= len(sqlite.Migrations()); version++ {
+		runMigration(t, db, version)
+	}
+	if got := text(t, db, everyNomination); got != nominationsBefore {
+		t.Fatalf("the later migrations keep every Nomination:\ngot\n%s\nwant\n%s", got, nominationsBefore)
+	}
 	store := newStore(t, db)
 	group := loaded(t, store)
 	for spelling, name := range map[domain.Spelling]string{

@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 )
 
-const schemaFile = "manifest.schema.json"
-
 func emptyRawFolder(raw string) error {
 	if err := os.MkdirAll(raw, 0o755); err != nil {
 		return fmt.Errorf("creating the raw folder: %w", err)
@@ -27,10 +25,10 @@ func emptyRawFolder(raw string) error {
 	return nil
 }
 
-func writeSchema(folder string) (string, error) {
-	path := filepath.Join(folder, schemaFile)
-	if err := os.WriteFile(path, []byte(manifestSchema), 0o644); err != nil {
-		return "", fmt.Errorf("writing the manifest schema: %w", err)
+func writeSchema(folder string, j job) (string, error) {
+	path := filepath.Join(folder, j.schemaFile)
+	if err := os.WriteFile(path, []byte(j.schema), 0o644); err != nil {
+		return "", fmt.Errorf("writing %s: %w", j.schemaFile, err)
 	}
 	return path, nil
 }

@@ -37,6 +37,12 @@ contexts:
               A Member's proposal to correct how a Person's name is spelled,
               which Members agree to or say no to.
             identity: NameFixNumber
+          WhoSearch:
+            definition: >-
+              A Member's search for who a description fits, which AI answers
+              with one public figure, a short blurb and one photo, keeping any
+              source link out of the reply.
+            identity: WhoSearchNumber
         invariants:
           nomination-limit-not-less-than-one:
             statement: Every nomination limit a Group sets is at least one.
@@ -246,6 +252,20 @@ contexts:
             verified_by:
               - internal/nominations/domain/name_fix_test.go:TestNameFixWithdrawnByItsProposer
               - internal/nominations/delivery/chat/name_fix_test.go:TestOneNoStopsAFixThatNeedsEveryMember
+          who-searches-within-daily-limit:
+            on: SearchWho
+            statement: >-
+              Who searches per Member are not greater than the Group's who
+              search daily limit.
+            verified_by:
+              - internal/nominations/domain/who_search_test.go:TestWhoSearchesWithinDailyLimit
+          public-figure-spelled-as-a-person-is-that-person:
+            on: ReceivePublicFigure
+            statement: >-
+              A public figure whose name spells a Person in the Group is that
+              Person.
+            verified_by:
+              - internal/nominations/domain/who_search_test.go:TestPublicFigureSpelledAsAPersonIsThatPerson
     value_objects:
       CertificationStatus:
         definition: >-
@@ -265,8 +285,8 @@ contexts:
       replies and reactions Members send and the messages GenTalent sends back.
   ai:
     definition: >-
-      AI agents that do work for the Group, now finding a Person's photos,
-      within limits.
+      AI agents that do work for the Group, now finding a Person's photos and
+      who a description fits, within limits.
 relations:
   - from: messaging
     to: nominations
@@ -279,4 +299,5 @@ relations:
     to: nominations
     kind: customer_supplier
     description: >-
-      AI finds a Person's photos when the nomination process asks for them.
+      AI finds a Person's photos, and who a description fits, when the
+      nomination process asks.

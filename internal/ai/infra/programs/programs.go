@@ -9,3 +9,11 @@ func Programs() map[string]port.Agent {
 		"agy":    Agy{},
 	}
 }
+
+func WhoAgents() map[string]port.WhoAgent {
+	return map[string]port.WhoAgent{
+		"codex":  Codex{},
+		"claude": Claude{},
+		"agy":    Agy{},
+	}
+}

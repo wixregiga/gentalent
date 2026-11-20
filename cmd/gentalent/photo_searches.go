@@ -10,50 +10,62 @@ import (
 	"gentalent/internal/nominations/delivery/chat"
 )
 
-type photoSearches struct {
-	finder  *aicommand.Finder
-	slots   chan struct{}
-	results chan chat.PhotoResult
-	group   *sync.WaitGroup
-	running int
-	kept    []chat.PhotoResult
-	log     *slog.Logger
+type searches[S, R any] struct {
+	run         func(context.Context, S) R
+	interrupted func(S, error) R
+	slots       chan struct{}
+	results     chan R
+	group       *sync.WaitGroup
+	running     int
+	kept        []R
 }
 
-func newPhotoSearches(finder *aicommand.Finder, workers int, log *slog.Logger) photoSearches {
-	return photoSearches{finder: finder, slots: make(chan struct{}, workers), results: make(chan chat.PhotoResult), group: &sync.WaitGroup{}, log: log}
+func newSearches[S, R any](workers int, run func(context.Context, S) R, interrupted func(S, error) R) searches[S, R] {
+	return searches[S, R]{run: run, interrupted: interrupted, slots: make(chan struct{}, workers), results: make(chan R), group: &sync.WaitGroup{}}
 }
 
-func (p *photoSearches) start(ctx context.Context, search chat.PhotoSearch) {
-	p.running++
-	p.group.Go(func() {
-		result := p.find(ctx, search)
+func (s *searches[S, R]) start(ctx context.Context, search S) {
+	s.running++
+	s.group.Go(func() {
+		result := s.find(ctx, search)
 		select {
-		case p.results <- result:
+		case s.results <- result:
 		case <-ctx.Done():
 		}
 	})
 }
 
-func (p *photoSearches) find(ctx context.Context, search chat.PhotoSearch) chat.PhotoResult {
+func (s *searches[S, R]) find(ctx context.Context, search S) R {
 	select {
-	case p.slots <- struct{}{}:
+	case s.slots <- struct{}{}:
 	case <-ctx.Done():
-		return chat.PhotoResult{Nomination: search.Nomination, Failure: ctx.Err().Error()}
+		return s.interrupted(search, ctx.Err())
 	}
-	defer func() { <-p.slots }()
-	found, err := p.finder.Find(ctx, aidomain.Subject{Name: search.Person, Pitch: search.Pitch, Dir: search.Dir})
-	if err != nil {
-		p.log.WarnContext(ctx, "photo search failed", "nomination", search.Nomination, "error", err)
-		return chat.PhotoResult{Nomination: search.Nomination, Failure: err.Error()}
-	}
-	return chat.PhotoResult{
-		Nomination: search.Nomination, Photos: found.Photos, Strip: found.Strip, Provider: found.Provider, Sources: found.Sources,
-		Summary: found.Summary,
-	}
+	defer func() { <-s.slots }()
+	return s.run(ctx, search)
 }
 
-func (p *photoSearches) stop(cancel context.CancelFunc) {
+func (s *searches[S, R]) stop(cancel context.CancelFunc) {
 	cancel()
-	p.group.Wait()
+	s.group.Wait()
+}
+
+type photoSearches = searches[chat.PhotoSearch, chat.PhotoResult]
+
+func newPhotoSearches(finder *aicommand.Finder, workers int, log *slog.Logger) photoSearches {
+	run := func(ctx context.Context, search chat.PhotoSearch) chat.PhotoResult {
+		found, err := finder.Find(ctx, aidomain.Subject{Name: search.Person, Pitch: search.Pitch, Dir: search.Dir})
+		if err != nil {
+			log.WarnContext(ctx, "photo search failed", "nomination", search.Nomination, "error", err)
+			return chat.PhotoResult{Nomination: search.Nomination, Failure: err.Error()}
+		}
+		return chat.PhotoResult{
+			Nomination: search.Nomination, Photos: found.Photos, Strip: found.Strip, Provider: found.Provider, Sources: found.Sources,
+			Summary: found.Summary,
+		}
+	}
+	interrupted := func(search chat.PhotoSearch, err error) chat.PhotoResult {
+		return chat.PhotoResult{Nomination: search.Nomination, Failure: err.Error()}
+	}
+	return newSearches(workers, run, interrupted)
 }

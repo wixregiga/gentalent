@@ -26,6 +26,7 @@ type engine struct {
 	reactions mquery.ReactionReader
 	flusher   mcommand.Flusher
 	photos    photoSearches
+	who       whoSearches
 	pollEvery time.Duration
 	now       func() time.Time
 	log       *slog.Logger
@@ -37,7 +38,12 @@ type platform struct {
 	delivery port.MessageReader
 }
 
-func newEngine(cfg config, w *workerDatabases, p platform, finder *aicommand.Finder, log *slog.Logger) *engine {
+type aiAgents struct {
+	finder     *aicommand.Finder
+	identifier *aicommand.Identifier
+}
+
+func newEngine(cfg config, w *workerDatabases, p platform, ai aiAgents, log *slog.Logger) *engine {
 	group := cfg.group()
 	return &engine{
 		bot:       w.bot,
@@ -46,7 +52,8 @@ func newEngine(cfg config, w *workerDatabases, p platform, finder *aicommand.Fin
 		replies:   mcommand.Enqueuer{Store: w.inbox},
 		reactions: mquery.ReactionReader{Replies: w.inbox, Platform: p.reader, Group: group},
 		flusher:   mcommand.Flusher{Store: w.inbox, Sender: p.sender, Reader: p.delivery, Log: log},
-		photos:    newPhotoSearches(finder, cfg.PhotoSearchWorkers, log),
+		photos:    newPhotoSearches(ai.finder, cfg.PhotoSearchWorkers, log),
+		who:       newWhoSearches(ai.identifier, cfg.PhotoSearchWorkers, log),
 		pollEvery: cfg.pollEvery(),
 		now:       w.now,
 		log:       log,
@@ -55,11 +62,12 @@ func newEngine(cfg config, w *workerDatabases, p platform, finder *aicommand.Fin
 
 func (e *engine) run(ctx context.Context, once bool) error {
 	ctx, cancel := context.WithCancel(ctx)
+	defer e.who.stop(cancel)
 	defer e.photos.stop(cancel)
 	if err := e.bot.AbandonInterruptedSearches(ctx); err != nil {
-		return fmt.Errorf("abandon interrupted photo searches: %w", err)
+		return fmt.Errorf("abandon interrupted searches: %w", err)
 	}
-	if err := e.claimPhotoSearches(ctx); err != nil {
+	if err := errors.Join(e.claimPhotoSearches(ctx), e.claimWhoSearches(ctx)); err != nil {
 		return err
 	}
 	if once {
@@ -73,6 +81,8 @@ func (e *engine) run(ctx context.Context, once bool) error {
 			return nil
 		case result := <-e.photos.results:
 			e.report(ctx, errors.Join(e.attach(ctx, result), e.relay(ctx)))
+		case result := <-e.who.results:
+			e.report(ctx, errors.Join(e.receiveWho(ctx, result), e.relay(ctx)))
 		case <-next.C:
 			e.report(ctx, e.cycle(ctx))
 			next.Reset(e.pollEvery)
@@ -84,12 +94,16 @@ func (e *engine) once(ctx context.Context) error {
 	if err := e.cycle(ctx); err != nil {
 		return err
 	}
-	for e.photos.running > 0 {
+	for e.photos.running > 0 || e.who.running > 0 {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case result := <-e.photos.results:
 			if err := e.attach(ctx, result); err != nil {
+				return err
+			}
+		case result := <-e.who.results:
+			if err := e.receiveWho(ctx, result); err != nil {
 				return err
 			}
 		}
@@ -104,12 +118,12 @@ func (e *engine) report(ctx context.Context, err error) {
 }
 
 func (e *engine) cycle(ctx context.Context) error {
-	attached := e.attachKept(ctx)
+	attached := errors.Join(e.attachKept(ctx), e.receiveKeptWho(ctx))
 	if err := e.poller.Poll(ctx); err != nil {
 		return errors.Join(attached, fmt.Errorf("poll: %w", err))
 	}
 	inbox := e.applyInbox(ctx)
-	claimed := e.claimPhotoSearches(ctx)
+	claimed := errors.Join(e.claimPhotoSearches(ctx), e.claimWhoSearches(ctx))
 	reactions := e.countReactions(ctx)
 	due := e.bot.FinalizeDue(ctx, e.now())
 	lapsed := e.bot.ExpireNameFixes(ctx, e.now())
@@ -231,6 +245,36 @@ func (e *engine) attachKept(ctx context.Context) error {
 	var err error
 	for _, result := range kept {
 		err = errors.Join(err, e.attach(ctx, result))
+	}
+	return err
+}
+
+func (e *engine) claimWhoSearches(ctx context.Context) error {
+	searches, err := e.bot.ClaimWhoSearches(ctx)
+	if err != nil {
+		return fmt.Errorf("claim who searches: %w", err)
+	}
+	for _, search := range searches {
+		e.who.start(ctx, search)
+	}
+	return nil
+}
+
+func (e *engine) receiveWho(ctx context.Context, result chat.WhoResult) error {
+	if err := e.bot.ReceiveWho(ctx, result); err != nil {
+		e.who.kept = append(e.who.kept, result)
+		return fmt.Errorf("answer who search %d, retried next poll: %w", result.Number, err)
+	}
+	e.who.running--
+	return nil
+}
+
+func (e *engine) receiveKeptWho(ctx context.Context) error {
+	kept := e.who.kept
+	e.who.kept = nil
+	var err error
+	for _, result := range kept {
+		err = errors.Join(err, e.receiveWho(ctx, result))
 	}
 	return err
 }

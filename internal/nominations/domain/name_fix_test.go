@@ -115,7 +115,7 @@ func TestOnePendingNameFixPerPerson(t *testing.T) {
 	if _, err := domain.NewGroup("group-test", memberIDs, fixing(100), personsOf(history), history, nil, []domain.NameFix{
 		{Number: 1, Nomination: 1, Person: misspelled.ID, Status: domain.NameFixPending},
 		{Number: 2, Nomination: 1, Person: misspelled.ID, Status: domain.NameFixPending},
-	}); !errors.As(err, new(domain.Refusal)) {
+	}, nil); !errors.As(err, new(domain.Refusal)) {
 		t.Fatalf("a Group loaded with two pending fixes for one Person: %v", err)
 	}
 	if _, err := group.StopNameFix(alex.ID, first.Nomination, today); err != nil {

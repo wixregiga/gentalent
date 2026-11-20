@@ -29,12 +29,12 @@ func generateMedia(ctx context.Context, call invocation, args []string) error {
 	if err != nil {
 		return err
 	}
-	finder, err := photoFinder(cfg, *cli)
+	ai, err := aiPrograms(cfg, *cli)
 	if err != nil {
 		return err
 	}
 	dir := filepath.Join(cfg.MediaDir, "generate-media", time.Now().UTC().Format("20060102-150405.000000000"))
-	found, err := finder.Find(ctx, aidomain.Subject{Name: name[0], Pitch: *pitch, Dir: dir})
+	found, err := ai.finder.Find(ctx, aidomain.Subject{Name: name[0], Pitch: *pitch, Dir: dir})
 	if err != nil {
 		return err
 	}

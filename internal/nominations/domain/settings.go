@@ -13,6 +13,7 @@ type Settings struct {
 	AllowNameFixes               bool
 	NameFixAgreementPercentage   int
 	NameFixWindow                time.Duration
+	WhoSearchDailyLimit          int
 }
 
 type Limit string

@@ -19,7 +19,7 @@ func gentalent(t *testing.T, args ...string) (code int, stdout, stderr string) {
 func TestBusyExitsNonZeroOnlyWhileAPhotoSearchIsStarted(t *testing.T) {
 	dir := t.TempDir()
 	config := writeConfig(t, dir, func(values map[string]any) { values["group_open_nomination_limit"] = 2 })
-	if code, out, errs := gentalent(t, "--config", config, "busy", "--live"); code != 0 || !strings.Contains(out, "No photo search") {
+	if code, out, errs := gentalent(t, "--config", config, "busy", "--live"); code != 0 || !strings.Contains(out, "No AI search") {
 		t.Fatalf("D27 no database means nothing is running: %d %q %q", code, out, errs)
 	}
 
@@ -48,6 +48,17 @@ func TestBusyExitsNonZeroOnlyWhileAPhotoSearchIsStarted(t *testing.T) {
 	}
 	if code, _, _ := gentalent(t, "--config", config, "busy"); code != 0 {
 		t.Fatal("B188 without --live busy reads the dry-run database")
+	}
+	who := chat.Message{ID: "message-2", Sender: caseyID, Text: "!!gtwho the woman who wrote the first computer program", SentAt: time.Now()}
+	if err := databases.bot.Handle(t.Context(), who); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := databases.bot.ClaimWhoSearches(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	code, _, errs = gentalent(t, "--config", config, "busy", "--live")
+	if code != 1 || !strings.Contains(errs, "nominations 1") || !strings.Contains(errs, "who searches 1") {
+		t.Fatalf("busy while a photo search and a who search run: %d %q", code, errs)
 	}
 
 	code, out, errs := gentalent(t, "--config", config, "status", "--live")

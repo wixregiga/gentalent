@@ -38,9 +38,10 @@ var subcommands = []subcommand{
 	{"status", "Show nominations and replies needing attention (read-only; safe while running).", status},
 	{"feedback", "List !gtfeedback and !gtsuggest entries (read-only; safe while running).", feedback},
 	{"resolve-send", "Record a checked outcome for an uncertain or failed reply.", resolveSend},
-	{"busy", "Exit non-zero while a photo search is running (read-only; the deploy uses it).", busy},
+	{"busy", "Exit non-zero while a photo or who search is running (read-only; the deploy uses it).", busy},
 	{"backup", "Copy each existing database into backups/ beside it (safe while running; the deploy uses it).", backup},
 	{"generate-media", "Run the subscription-only multi-model photo strip builder.", generateMedia},
+	{"who", "Run one who search with the subscription AI programs and print its answer (no ballot, no chat).", whoSearch},
 }
 
 type usageError struct {

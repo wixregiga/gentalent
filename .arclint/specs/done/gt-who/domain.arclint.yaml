@@ -1,0 +1,303 @@
+# yaml-language-server: $schema=.arclint/schemas/domain.arclint.schema.json
+version: 1
+project: GenTalent
+contexts:
+  nominations:
+    definition: >-
+      The nomination process: Members nominate a Person, the Group votes on each
+      Nomination, and finalizing it certifies or rejects the Person as a
+      Generational Talent.
+    aggregates:
+      Group:
+        definition: The Members and their shared chat space.
+        identity: GroupID
+        entities:
+          Nomination:
+            definition: >-
+              One Member's proposal that a Person be certified a Generational
+              Talent. A Renomination is a Nomination of a Person who was
+              rejected as a Generational Talent before.
+            identity: NominationNumber
+          Member:
+            definition: One of the three people in the Group.
+            identity: MemberID
+          Person:
+            definition: >-
+              Someone who has been nominated at least once by a Member to be a
+              Generational Talent. A Person can be rejected or certified through
+              the nomination process.
+            identity: PersonID
+          Shame:
+            definition: >-
+              A message to a Member of the Group that calls them out over a
+              Person or a Nomination, which it refers to by its identity.
+            identity: ShameID
+          NameFix:
+            definition: >-
+              A Member's proposal to correct how a Person's name is spelled,
+              which Members agree to or say no to.
+            identity: NameFixNumber
+          WhoSearch:
+            definition: >-
+              A Member's search for who a description fits, which AI answers
+              with one public figure, a short blurb and one photo, keeping any
+              source link out of the reply.
+            identity: WhoSearchNumber
+        invariants:
+          nomination-limit-not-less-than-one:
+            statement: Every nomination limit a Group sets is at least one.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestNominationLimitNotLessThanOne
+          one-open-nomination-per-person:
+            statement: A Person may only have one open Nomination at a time.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestOneOpenNominationPerPerson
+          certified-by-unanimous-yes:
+            statement: A finalized Nomination certifies its Person only when every Member voted yes; any no rejects them.
+            verified_by:
+              - internal/nominations/domain/finalize_test.go:TestCertifiedByUnanimousYes
+          one-pending-name-fix-per-person:
+            statement: A Person has at most one pending NameFix.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestOnePendingNameFixPerPerson
+              - internal/nominations/infra/sqlite/name_fix_store_test.go:TestEndedNameFixesArePermanent
+          name-fix-agreement-percentage-within-range:
+            statement: >-
+              Every name fix agreement percentage a Group sets is more than 0
+              and at most 100.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixAgreementPercentageWithinRange
+              - cmd/gentalent/config_test.go:TestNameFixSettingsOutOfRangeRefuseToStartAndNameTheSetting
+          name-fix-window-at-least-one-hour:
+            statement: Every name fix window a Group sets is at least one hour.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixWindowAtLeastOneHour
+              - cmd/gentalent/config_test.go:TestNameFixSettingsOutOfRangeRefuseToStartAndNameTheSetting
+        assertions:
+          open-nominations-within-group-limit:
+            on: Nominate
+            statement: >-
+              A Member nominates a person only while the Group has fewer open
+              Nominations than its open nomination limit.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestOpenNominationsWithinGroupLimit
+              - internal/nominations/domain/group_test.go:TestLoweringTheGroupLimitRefusesOnlyNewNominations
+          open-nominations-within-member-limit:
+            on: Nominate
+            statement: >-
+              A Member nominates a person only while that Member has fewer open
+              Nominations than the member open nomination limit.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestOpenNominationsWithinMemberLimit
+          nominations-per-message-within-limit:
+            on: Nominate
+            statement: >-
+              One message nominates no more people than the single message
+              nomination limit.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestNominationsPerMessageWithinLimit
+          vote-names-its-nomination:
+            on: CastVote
+            statement: >-
+              A Member's vote names its Nomination whenever more than one
+              Nomination is open.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestVoteNamesItsNomination
+              - internal/nominations/domain/group_test.go:TestUnnamedVoteCountsWithOneOpenNomination
+          renominated-only-through-renomination:
+            on: Nominate
+            statement: >-
+              A Person may only be renominated through the renomination process.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestRenominatedOnlyThroughRenomination
+          renominated-only-when-rejected:
+            on: Renominate
+            statement: >-
+              A Person may only be renominated if their certification status has
+              been rejected.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestRenominatedOnlyWhenRejected
+          renominated-only-when-group-allows:
+            on: Renominate
+            statement: >-
+              A Person may only be renominated if the Group allows renomination.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestRenominatedOnlyWhenGroupAllows
+          message-nominates-all-or-none:
+            on: Nominate
+            statement: >-
+              A message that nominates more people than the limits have room for
+              nominates no one.
+            verified_by:
+              - internal/nominations/domain/group_test.go:TestMessageNominatesAllOrNone
+          votes-change-until-the-third-vote:
+            on: CastVote
+            statement: >-
+              A Member can vote, change their vote, or clear it, until the third
+              vote is in.
+            verified_by:
+              - internal/nominations/domain/vote_test.go:TestVotesChangeUntilTheThirdVote
+          removed-reaction-clears-only-its-vote:
+            on: CountReactions
+            statement: Removing a reaction clears the vote it cast.
+            verified_by:
+              - internal/nominations/domain/vote_test.go:TestRemovedReactionClearsOnlyItsVote
+          finalized-only-when-all-votes-are-in:
+            on: Finalize
+            statement: >-
+              A Nomination is finalized early only once all three votes are in.
+            verified_by:
+              - internal/nominations/domain/finalize_test.go:TestFinalizedOnlyWhenAllVotesAreIn
+          finalized-early-only-by-nominator:
+            on: Finalize
+            statement: Only the nominator finalizes a Nomination early.
+            verified_by:
+              - internal/nominations/domain/finalize_test.go:TestFinalizedEarlyOnlyByNominator
+          finalized-a-minute-after-the-last-vote:
+            on: FinalizeDue
+            statement: >-
+              A Nomination with every vote in is finalized one minute after its
+              last vote unless its nominator finalizes it first.
+            verified_by:
+              - internal/nominations/domain/finalize_test.go:TestFinalizedAMinuteAfterTheLastVote
+          photos-searched-at-most-once-per-nomination:
+            on: Nominate
+            statement: A Nomination's photos are searched for at most once.
+            verified_by:
+              - internal/nominations/domain/photo_search_test.go:TestPhotosSearchedAtMostOncePerNomination
+          one-shame-per-member-per-nomination:
+            on: Shame
+            statement: Each Member gives at most one Shame per Nomination.
+            verified_by:
+              - internal/nominations/domain/shame_test.go:TestOneShamePerMemberPerNomination
+          close-spelling-names-only-an-open-nomination:
+            on: CastVote
+            statement: >-
+              A vote that spells a Person's name closely, not exactly, counts
+              only on an open Nomination.
+            verified_by:
+              - internal/nominations/domain/vote_test.go:TestCloseSpellingNamesOnlyAnOpenNomination
+              - internal/nominations/delivery/chat/vote_test.go:TestTheSofiaVergaraVote
+              - internal/nominations/delivery/chat/vote_test.go:TestCloseSpellingsOfOpenNames
+              - internal/nominations/delivery/chat/vote_test.go:TestCloseSpellingOfAClosedNameKeepsDidYouMean
+          close-spelling-names-one-nomination:
+            on: CastVote
+            statement: >-
+              A close spelling that fits more than one open Nomination names
+              none of them.
+            verified_by:
+              - internal/nominations/domain/vote_test.go:TestCloseSpellingNamesOneNomination
+              - internal/nominations/delivery/chat/vote_test.go:TestCloseSpellingThatFitsTwoOpenNominationsNamesNone
+          name-fixed-only-when-enough-members-agree:
+            on: AgreeToNameFix
+            statement: >-
+              A Person's name is fixed only once the Group's name fix agreement
+              percentage of Members agree to the NameFix.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixedOnlyWhenEnoughMembersAgree
+              - internal/nominations/delivery/chat/name_fix_test.go:TestAMisspelledNameIsFixedWhenEveryMemberAgrees
+              - internal/nominations/delivery/chat/name_fix_test.go:TestAFixNeedsOnlyTheConfiguredShareOfMembers
+          name-fixed-once-per-person:
+            on: AgreeToNameFix
+            statement: A Person's name is fixed at most once.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixedOncePerPerson
+              - internal/nominations/delivery/chat/name_fix_test.go:TestNameFixRefusals
+          name-fix-never-takes-another-persons-spelling:
+            on: AgreeToNameFix
+            statement: >-
+              A Person's name is never fixed to a spelling that names another
+              Person.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixNeverTakesAnotherPersonsSpelling
+              - internal/nominations/delivery/chat/name_fix_test.go:TestNameFixRefusals
+          earlier-spellings-still-name-the-person:
+            on: AgreeToNameFix
+            statement: >-
+              A Person's earlier spellings still name them after their name is
+              fixed.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestEarlierSpellingsStillNameThePerson
+              - internal/nominations/delivery/chat/name_fix_test.go:TestBothSpellingsKeepNamingTheFixedPerson
+              - internal/nominations/infra/sqlite/name_fix_store_test.go:TestANameFixIsKeptFromProposalToFixedName
+              - internal/nominations/infra/sqlite/person_ids_test.go:TestEveryPersonGetsAnOpaqueIDAndKeepsTheirBallot
+          name-fix-stopped-when-agreement-is-out-of-reach:
+            on: StopNameFix
+            statement: >-
+              A NameFix stops for good once so many Members say no that it can
+              no longer reach the agreement percentage.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixStoppedWhenAgreementIsOutOfReach
+              - internal/nominations/delivery/chat/name_fix_test.go:TestOneNoStopsAFixThatNeedsEveryMember
+          name-fix-lapses-after-the-name-fix-window:
+            on: ExpireNameFixes
+            statement: >-
+              A NameFix without enough agreement when the Group's name fix
+              window ends lapses without fixing the name.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixLapsesAfterTheNameFixWindow
+              - internal/nominations/delivery/chat/name_fix_test.go:TestAnUnansweredFixLapsesAfterItsWindow
+          name-fixed-only-when-group-allows:
+            on: ProposeNameFix
+            statement: >-
+              A Person's name is fixed only if the Group allows name fixes.
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixedOnlyWhenGroupAllows
+              - internal/nominations/delivery/chat/name_fix_test.go:TestNameFixRefusals
+          name-fix-withdrawn-by-its-proposer:
+            on: StopNameFix
+            statement: >-
+              the member that proposes a name fix can withdraw it with their own
+              no
+            verified_by:
+              - internal/nominations/domain/name_fix_test.go:TestNameFixWithdrawnByItsProposer
+              - internal/nominations/delivery/chat/name_fix_test.go:TestOneNoStopsAFixThatNeedsEveryMember
+          who-searches-within-daily-limit:
+            on: SearchWho
+            statement: >-
+              Who searches per Member are not greater than the Group's who
+              search daily limit.
+            verified_by:
+              - internal/nominations/domain/who_search_test.go:TestWhoSearchesWithinDailyLimit
+          public-figure-spelled-as-a-person-is-that-person:
+            on: ReceivePublicFigure
+            statement: >-
+              A public figure whose name spells a Person in the Group is that
+              Person.
+            verified_by:
+              - internal/nominations/domain/who_search_test.go:TestPublicFigureSpelledAsAPersonIsThatPerson
+    value_objects:
+      CertificationStatus:
+        definition: >-
+          Where a Person stands in the nomination process: nominated, certified,
+          or rejected.
+    specifications:
+      GenerationalTalent:
+        definition: >-
+          A Person who has been certified through the nomination process.
+    questions:
+      group-of-any-size: >-
+        The Group is moving from exactly three Members to any number of Members.
+        Which rules that count three Members change, and how?
+  messaging:
+    definition: >-
+      The Group's conversation, whatever platform carries it: the messages,
+      replies and reactions Members send and the messages GenTalent sends back.
+  ai:
+    definition: >-
+      AI agents that do work for the Group, now finding a Person's photos and
+      who a description fits, within limits.
+relations:
+  - from: messaging
+    to: nominations
+    kind: customer_supplier
+    description: >-
+      Messaging delivers Members' messages, replies and reactions in its own
+      platform-free terms and sends the nomination process's replies; Beeper and
+      bbctl are adapters inside messaging.
+  - from: ai
+    to: nominations
+    kind: customer_supplier
+    description: >-
+      AI finds a Person's photos, and who a description fits, when the
+      nomination process asks.

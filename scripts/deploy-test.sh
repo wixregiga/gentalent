@@ -152,7 +152,7 @@ expect "a commit whose startup does not run the installed binary is refused" 1 "
 
 touch .state/busy
 run_deploy "$second"
-expect "a deploy waits while the running bot has a photo search" 1 "$first" "a photo search is running"
+expect "a deploy waits while the running bot has an AI search" 1 "$first" "an AI search is running"
 rm .state/busy
 
 run_deploy --check "$second"

@@ -55,13 +55,17 @@ func (b *Bot) AttachPhotos(ctx context.Context, result PhotoResult) error {
 
 func (b *Bot) AbandonInterruptedSearches(ctx context.Context) error {
 	now := b.config.Now()
-	return b.abandon.Handle(ctx, present(b, eventKey("abandoned", now), nil, func(w wording, abandoned []domain.Nomination) []port.Reply {
+	err := b.abandon.Handle(ctx, present(b, eventKey("abandoned", now), nil, func(w wording, abandoned []domain.Nomination) []port.Reply {
 		replies := make([]port.Reply, len(abandoned))
 		for i, nomination := range abandoned {
 			replies[i] = port.Reply{Text: "The photo search for " + w.name(nomination.Number) + " was interrupted, so it has no photos."}
 		}
 		return replies
 	}))
+	if err != nil {
+		return err
+	}
+	return b.abandonInterruptedWhoSearches(ctx, now)
 }
 
 func slug(name string) string {

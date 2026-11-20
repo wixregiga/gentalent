@@ -13,7 +13,10 @@ const (
 func (b *Bot) help(ctx context.Context, from Member, msg Message, match []string) error {
 	members := len(b.config.Members)
 	rule := "Any NO denies forever."
-	renominate, fix := "", ""
+	renominate, fix, who := "", "", ""
+	if b.config.Settings.WhoSearchDailyLimit > 0 {
+		who = "Who is that? !!gtwho a description of them"
+	}
 	if b.config.Settings.AllowNameFixes {
 		fix = "Fix a misspelled name: !gtfix 12 Ada Lovelace · agree !gtfixyes 12 · stop !gtfixno 12"
 	}
@@ -37,6 +40,7 @@ func (b *Bot) help(ctx context.Context, from Member, msg Message, match []string
 			"Finish early: !final (nominator) · !final 12",
 			"Status: !gtstatus",
 			"Lists: !gtlist · !gtlist losers",
+			who,
 			"Shame: reply to a message with !gtshame reason, or !gtshame @Name reason",
 			"Ideas for the bot: !gtfeedback your idea",
 		),

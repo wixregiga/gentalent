@@ -28,7 +28,7 @@ func (s Subject) Raw() string {
 }
 
 func (s Subject) PhotoPath(number int) string {
-	return filepath.Join(s.Dir, fmt.Sprintf("%02d_%s.jpg", number, slug(s.Name)))
+	return filepath.Join(s.Dir, fmt.Sprintf("%02d_%s.jpg", number, slug(s.Name, fallbackSlug)))
 }
 
 func (s Subject) StripPath() string {
@@ -43,7 +43,7 @@ func (s Subject) ManifestPath() string {
 	return filepath.Join(s.Dir, ManifestFile)
 }
 
-func slug(name string) string {
+func slug(name, fallback string) string {
 	var b strings.Builder
 	lastWasSeparator := false
 	for _, r := range strings.ToLower(name) {
@@ -60,7 +60,7 @@ func slug(name string) string {
 		trimmed = trimmed[:slugLimit]
 	}
 	if trimmed == "" {
-		return fallbackSlug
+		return fallback
 	}
 	return trimmed
 }

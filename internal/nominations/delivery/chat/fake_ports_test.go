@@ -18,6 +18,7 @@ type fakePorts struct {
 	shames      []domain.Shame
 	persons     []domain.Person
 	nameFixes   []domain.NameFix
+	whoSearches []domain.WhoSearch
 	handled     map[string]bool
 	outbox      []port.Reply
 	relayed     map[string]bool
@@ -31,7 +32,7 @@ func newFakePorts(t *testing.T, members []domain.MemberID, settings domain.Setti
 
 func (f *fakePorts) group() *domain.Group {
 	f.t.Helper()
-	group, err := domain.NewGroup("group-test", f.members, f.settings, f.persons, f.nominations, f.shames, f.nameFixes)
+	group, err := domain.NewGroup("group-test", f.members, f.settings, f.persons, f.nominations, f.shames, f.nameFixes, f.whoSearches)
 	if err != nil {
 		f.t.Fatalf("load the Group: %v", err)
 	}
@@ -68,7 +69,7 @@ func (f *fakePorts) Apply(_ context.Context, messageID string, change port.Chang
 		return err
 	}
 	f.claim(messageID)
-	f.persons, f.nominations, f.shames, f.nameFixes = group.Persons(), group.Nominations(), group.Shames(), group.NameFixes()
+	f.persons, f.nominations, f.shames, f.nameFixes, f.whoSearches = group.Persons(), group.Nominations(), group.Shames(), group.NameFixes(), group.WhoSearches()
 	f.queue(replies)
 	return nil
 }
@@ -148,6 +149,11 @@ func (f *fakePorts) Standing(context.Context) (port.Standing, error) {
 			order = append(order, n.Person)
 		}
 		latest[n.Person] = n
+	}
+	for _, search := range f.whoSearches {
+		if search.Status == domain.WhoSearching {
+			standing.WhoSearching = append(standing.WhoSearching, search.Number)
+		}
 	}
 	slices.SortFunc(order, func(a, b domain.PersonID) int { return int(latest[a].Number - latest[b].Number) })
 	for _, id := range order {

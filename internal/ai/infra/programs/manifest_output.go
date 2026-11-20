@@ -34,7 +34,7 @@ func decodeManifest(output string) (domain.Manifest, error) {
 	if err != nil {
 		return domain.Manifest{}, err
 	}
-	object, err := manifestObject(payload)
+	object, err := agentObject(payload, isManifest)
 	if err != nil {
 		return domain.Manifest{}, err
 	}
@@ -77,7 +77,13 @@ func unmarshal(text string) (any, error) {
 	return value, err
 }
 
-func manifestObject(payload any) (map[string]any, error) {
+func isManifest(object map[string]any) bool {
+	_, hasPhotos := object["photos"]
+	_, hasName := object["canonical_name"]
+	return hasPhotos && hasName
+}
+
+func agentObject(payload any, isAnswer func(map[string]any) bool) (map[string]any, error) {
 	if text, ok := payload.(string); ok {
 		return objectFromText(text)
 	}
@@ -88,9 +94,7 @@ func manifestObject(payload any) (map[string]any, error) {
 	if inner, ok := object["structured_output"].(map[string]any); ok {
 		return inner, nil
 	}
-	_, hasPhotos := object["photos"]
-	_, hasName := object["canonical_name"]
-	if hasPhotos && hasName {
+	if isAnswer(object) {
 		return object, nil
 	}
 	switch result := object["result"].(type) {

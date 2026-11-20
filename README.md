@@ -21,6 +21,7 @@ Replies come from the account paired with Beeper, prefixed `@gentalent-bot says:
 | `!gtlist` / `!gtlist losers` | Certified winners (default) or denied nominees. |
 | `!gtshame [nominee] [reason]` as a reply | Shame the author of that message, quoting it, with a GIF. One shame given per nominee each. |
 | `!gtshame @Name [nominee] [reason]` | The same, by tag. The nominee defaults to the latest one. |
+| `!!gtwho description` | Ask who someone is. AI answers with one public figure, a short blurb and one photo, and says whether they are already in GenTalent. Nothing is nominated; send `!!gt` yourself. Limited per Member by `who_search_daily_limit`. |
 | `!gtfeedback idea` / `!gtsuggest idea` | Log an idea for the bot. Read them with `go run ./cmd/gentalent feedback --live`. |
 
 Messages from outside the configured group and roster, and edited, deleted or hidden
@@ -63,8 +64,8 @@ All of these run from the main checkout only, and a real deploy takes only commi
 
 A deploy runs the Go tests in a scratch checkout and `doctor --contract` against the real
 Beeper API. It refuses a commit whose startup script does not run `.live/bin/gentalent`. It
-refuses while a `!!gt` photo search is running (`gentalent busy` says), because a restart
-would abandon it. It refuses while `.live` has local changes (anything `git -C .live status`
+refuses while a `!!gt` photo search or a `!!gtwho` search is running (`gentalent busy` says),
+because a restart would abandon it. It refuses while `.live` has local changes (anything `git -C .live status`
 shows), because a checkout keeps them and the bot would run code no test saw. It backs up
 both databases into `.state/backups/` with `gentalent backup`, pins `.live`, installs the
 binary the tests ran against as `.live/bin/gentalent` and restarts. If the bot doesn't stay
@@ -88,16 +89,19 @@ not a database viewer on Windows: recent changes sit in `.state/nominations.sqli
 ## Working on it
 
 The bot is the Go program in `cmd/gentalent` (`doc/architecture.md` is the map).
-`go run ./cmd/gentalent` lists its subcommands; `busy` exits non-zero while a photo search is
-running, and `backup --live --label NAME` copies both databases into `backups/` beside them.
+`go run ./cmd/gentalent` lists its subcommands; `busy` exits non-zero while a photo or who search
+is running, `who "description"` runs one who search with your AI subscriptions and prints the
+answer without touching the ballot or the chat, and `backup --live --label NAME` copies both databases into `backups/` beside them.
 The bot keeps two databases, `nominations_database` and `messaging_database` in
 `config.json` (default `.state/nominations.sqlite3` and `.state/messaging.sqlite3`). It also
 reads `group_open_nomination_limit` and `member_open_nomination_limit` (default 1),
 `single_message_nomination_limit` (3), `allow_renomination` (false),
 `allow_name_fixes` (false), `name_fix_agreement_percent` (100, the share of Members whose
 agreement fixes a name), `name_fix_hours` (24, how long a proposed fix waits before it
-lapses) and `photo_search_workers` (3, the photo searches it runs at once); a limit below
-one, a percentage outside 1 to 100 or a window under an hour refuses to start. `mise run test` runs the Go suite and the deploy script checks.
+lapses), `who_search_daily_limit` (5, the `!!gtwho` searches each Member may start in any
+24 hours; 0 turns them off) and `photo_search_workers` (3, the photo searches it runs at once,
+and separately the who searches); a nomination limit below one, a negative who search limit, a
+percentage outside 1 to 100 or a window under an hour refuses to start. `mise run test` runs the Go suite and the deploy script checks.
 
 Changes happen in T3 Code worktree threads and ship from the main checkout with
 `mise run ship <branch>`. Commits and pushes are scanned for personal data and secrets

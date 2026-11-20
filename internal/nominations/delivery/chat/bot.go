@@ -56,6 +56,10 @@ type Bot struct {
 	claim        command.ClaimPhotoSearchesHandler
 	finish       command.FinishPhotoSearchHandler
 	abandon      command.AbandonInterruptedSearchesHandler
+	whoSearch    command.SearchWhoHandler
+	claimWho     command.ClaimWhoSearchesHandler
+	finishWho    command.FinishWhoSearchHandler
+	abandonWho   command.AbandonInterruptedWhoSearchesHandler
 	feedback     command.RecordFeedbackHandler
 	answer       command.AnswerHandler
 	relayed      command.MarkRelayedHandler
@@ -77,6 +81,10 @@ func NewBot(config Config, ports Ports) *Bot {
 		claim:        command.ClaimPhotoSearchesHandler{Groups: ports.Groups},
 		finish:       command.FinishPhotoSearchHandler{Groups: ports.Groups},
 		abandon:      command.AbandonInterruptedSearchesHandler{Groups: ports.Groups},
+		whoSearch:    command.SearchWhoHandler{Groups: ports.Groups},
+		claimWho:     command.ClaimWhoSearchesHandler{Groups: ports.Groups},
+		finishWho:    command.FinishWhoSearchHandler{Groups: ports.Groups},
+		abandonWho:   command.AbandonInterruptedWhoSearchesHandler{Groups: ports.Groups},
 		feedback:     command.RecordFeedbackHandler{Feedback: ports.Feedback},
 		answer:       command.AnswerHandler{Outbox: ports.Outbox},
 		relayed:      command.MarkRelayedHandler{Outbox: ports.Outbox},
@@ -97,6 +105,7 @@ var routes = []route{
 	{regexp.MustCompile(`(?is)^!{1,2}gtrenominate(?:\s.*)?$`), (*Bot).renominateAll},
 	{regexp.MustCompile(`(?is)^!{1,2}gtfix(yes|no)(?:\s+(.*))?$`), (*Bot).answerNameFix},
 	{regexp.MustCompile(`(?is)^!{1,2}gtfix(?:\s.*)?$`), (*Bot).proposeNameFixes},
+	{regexp.MustCompile(`(?is)^!!gtwho(?:\s+(.*))?$`), (*Bot).searchWho},
 	{regexp.MustCompile(`(?is)^!{1,2}gt(?:\s+(.*))?$`), (*Bot).nominateAll},
 	{regexp.MustCompile(`(?is)^!!(?:yes|y|no|n|clear|c)(?:$|[\s!.,;:\-\x{2014}\x{2013}].*)$`), (*Bot).vote},
 	{regexp.MustCompile(`(?is)^!final(?:\s+(.*))?$`), (*Bot).final},

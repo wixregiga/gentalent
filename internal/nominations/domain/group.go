@@ -18,10 +18,11 @@ type Group struct {
 	shames      []Shame
 	persons     map[PersonID]Person
 	nameFixes   []NameFix
+	whoSearches []WhoSearch
 }
 
 func NewGroup(id GroupID, members []MemberID, settings Settings, persons []Person, nominations []Nomination, shames []Shame,
-	nameFixes []NameFix) (*Group, error) {
+	nameFixes []NameFix, whoSearches []WhoSearch) (*Group, error) {
 	group := &Group{
 		id:          id,
 		members:     roster(members),
@@ -30,6 +31,7 @@ func NewGroup(id GroupID, members []MemberID, settings Settings, persons []Perso
 		shames:      slices.Clone(shames),
 		persons:     map[PersonID]Person{},
 		nameFixes:   cloneFixes(nameFixes),
+		whoSearches: slices.Clone(whoSearches),
 	}
 	named := map[Spelling]PersonID{}
 	for _, person := range persons {
@@ -50,7 +52,15 @@ func NewGroup(id GroupID, members []MemberID, settings Settings, persons []Perso
 		}
 	}
 	slices.SortFunc(group.nominations, func(a, b Nomination) int { return int(a.Number - b.Number) })
+	for _, search := range group.whoSearches {
+		if person := search.Figure.Person; person != "" {
+			if _, known := group.persons[person]; !known {
+				return nil, fmt.Errorf("who search %d names Person %s, who is not loaded", search.Number, person)
+			}
+		}
+	}
 	slices.SortFunc(group.nameFixes, func(a, b NameFix) int { return int(a.Number - b.Number) })
+	slices.SortFunc(group.whoSearches, func(a, b WhoSearch) int { return int(a.Number - b.Number) })
 	if err := errors.Join(group.EnsureNominationLimitNotLessThanOne(), group.EnsureOneOpenNominationPerPerson(), group.EnsureCertifiedByUnanimousYes(),
 		group.EnsureOnePendingNameFixPerPerson(), group.EnsureNameFixAgreementPercentageWithinRange(), group.EnsureNameFixWindowAtLeastOneHour()); err != nil {
 		return nil, err
@@ -219,6 +229,7 @@ func (g *Group) clone() *Group {
 		copied.persons[id] = person.clone()
 	}
 	copied.nameFixes = cloneFixes(g.nameFixes)
+	copied.whoSearches = slices.Clone(g.whoSearches)
 	return &copied
 }
 

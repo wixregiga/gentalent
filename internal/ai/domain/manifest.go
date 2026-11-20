@@ -25,12 +25,9 @@ func NewManifest(canonicalName, summary string, photos []PhotoSource) (Manifest,
 	}
 	checked := make([]PhotoSource, len(photos))
 	for i, photo := range photos {
-		file, err := boundedText("raw_filename", photo.File, 120)
+		file, err := rawFilename("raw_filename", photo.File)
 		if err != nil {
 			return Manifest{}, err
-		}
-		if strings.ContainsAny(file, `/\`) || file == "." || file == ".." {
-			return Manifest{}, fmt.Errorf("raw_filename must be a relative filename inside the raw folder: %q", file)
 		}
 		pageURL, err := boundedText("source_page_url", photo.PageURL, 2000)
 		if err != nil {
@@ -63,4 +60,15 @@ func boundedText(field, value string, limit int) (string, error) {
 		return "", fmt.Errorf("%s must be 1 to %d characters", field, limit)
 	}
 	return trimmed, nil
+}
+
+func rawFilename(field, value string) (string, error) {
+	file, err := boundedText(field, value, 120)
+	if err != nil {
+		return "", err
+	}
+	if strings.ContainsAny(file, `/\`) || file == "." || file == ".." {
+		return "", fmt.Errorf("%s must be a relative filename inside the raw folder: %q", field, file)
+	}
+	return file, nil
 }

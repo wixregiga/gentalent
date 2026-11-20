@@ -15,9 +15,19 @@ import (
 )
 
 const (
-	providerTimeout = 180 * time.Second
-	exitTextLimit   = 400
-	waitDelay       = 2 * time.Second
+	exitTextLimit = 400
+	waitDelay     = 2 * time.Second
+)
+
+type job struct {
+	schemaFile string
+	schema     string
+	timeout    time.Duration
+}
+
+var (
+	photoSearch = job{schemaFile: "manifest.schema.json", schema: manifestSchema, timeout: 180 * time.Second}
+	whoSearch   = job{schemaFile: "who.schema.json", schema: whoSchema, timeout: 90 * time.Second}
 )
 
 var strippedEnvironment = []string{
@@ -48,12 +58,12 @@ func subscriptionEnvironment(base []string) []string {
 	return kept
 }
 
-func runProvider(ctx context.Context, cli, dir, stdin string, args []string) ([]byte, error) {
+func runProvider(ctx context.Context, cli, dir, stdin string, args []string, timeout time.Duration) ([]byte, error) {
 	exe, err := exec.LookPath(cli)
 	if err != nil {
 		return nil, fmt.Errorf("%s CLI is not installed or on PATH", cli)
 	}
-	return runProgram(ctx, call{exe: exe, args: args, dir: dir, stdin: stdin, timeout: providerTimeout})
+	return runProgram(ctx, call{exe: exe, args: args, dir: dir, stdin: stdin, timeout: timeout})
 }
 
 func runProgram(ctx context.Context, c call) ([]byte, error) {
