@@ -42,6 +42,13 @@ printf '[daemons.gentalent]\nrun = "exec ./.live/scripts/run-gentalent-live.sh .
 printf 'module stub\n\ngo 1.27\n' >go.mod
 printf '.live/\n.state/\nconfig.json\n/bin/\n*_local.go\n' >.gitignore
 bot() {
+  local schema=""
+  if [[ "${2:-}" == ahead-of-live ]]; then
+    schema='if slices.Contains(os.Args, "busy") {
+		fmt.Fprintln(os.Stderr, "no such table: newer_table")
+		os.Exit(1)
+	}'
+  fi
   cat >cmd/gentalent/main.go <<EOF
 package main
 
@@ -52,6 +59,7 @@ import (
 )
 
 func main() {
+	$schema
 	if _, err := os.Stat(".state/busy"); err == nil && slices.Contains(os.Args, "busy") {
 		os.Exit(1)
 	}
@@ -76,6 +84,9 @@ first="$(git rev-parse HEAD)"
 bot second
 git commit --quiet -am "Second bot"
 second="$(git rev-parse HEAD)"
+bot third ahead-of-live
+git commit --quiet -am "Third bot, whose busy reads a table only its own migration adds"
+third="$(git rev-parse HEAD)"
 git checkout --quiet -b elsewhere
 printf '#!/usr/bin/env bash\nexec ./some-other-program "$@"\n' >scripts/run-gentalent-live.sh
 git commit --quiet -am "Start some other program"
@@ -172,5 +183,10 @@ run_deploy "$second"
 expect "a failed deploy rolls back to the previous commit" 1 "$first" "Rolling .live back to ${first:0:7}."
 expect_binary "the rollback reinstalls the previous commit's binary" first
 rm .state/crash
+
+live_at "$first"
+run_deploy "$third"
+expect "the running bot's binary answers busy, not the target's, which expects a newer schema" 0 "$third" "Live bot running"
+expect_binary "the target's binary is installed after its migration-dependent busy was not asked" third
 
 exit "$failures"

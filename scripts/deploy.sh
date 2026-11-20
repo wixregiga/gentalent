@@ -75,7 +75,13 @@ if [[ -e .live && -n "$(git -C .live status --porcelain --untracked-files=all)" 
 fi
 previous="$(git -C .live rev-parse HEAD 2>/dev/null || true)"
 
-if ! "$gentalent" --config "$root/config.json" busy --live; then
+# Ask the running bot's own binary: its searches are the ones a restart abandons, and it reads the
+# databases at the schema it migrated them to. Before the first deploy there is none to ask.
+running="$gentalent"
+if [[ -x .live/bin/gentalent ]]; then
+  running="$root/.live/bin/gentalent"
+fi
+if ! "$running" --config "$root/config.json" busy --live; then
   # A restart abandons a running photo or who search for good (it is never rerun).
   echo "The live bot is mid-operation (an AI search is running). Try again in a few minutes." >&2
   exit 1
