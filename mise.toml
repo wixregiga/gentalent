@@ -30,8 +30,8 @@ retry = true
 proxy = false
 
 [tasks.test]
-description = "Run the Go test suite and the deploy and ship script checks"
-run = ["go vet ./...", "go test ./...", "bash scripts/deploy-test.sh", "bash scripts/ship-test.sh"]
+description = "Run the Go test suite and the deploy, ship, and platform-update script checks"
+run = ["go vet ./...", "go test ./...", "bash scripts/deploy-test.sh", "bash scripts/ship-test.sh", "bash scripts/update-platform-test.sh"]
 
 [tasks.privacy]
 description = "Scan every commit on every local branch for personal data and secrets"
@@ -45,14 +45,23 @@ run = "./scripts/ship.sh"
 description = "Test a commit (default HEAD), pin .live to it, restart the live bot"
 run = "./scripts/deploy.sh"
 
+[tasks.check-updates]
+description = "Check platform version, API contract compatibility, and pending updates"
+run = "go run ./cmd/gentalent check-updates --live"
+
+[tasks.update-platform]
+description = "Safely apply and verify a managed platform update (for example: mise run update-platform beeper)"
+run = "./scripts/update-platform.sh"
+
 [tasks.status]
-description = "Daemons, deployed commit, Beeper check, and replies needing attention"
+description = "Daemons, deployed commit, Beeper check, update status, and replies needing attention"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
 mise daemons status
 echo "Deployed: $(git -C .live log -1 --format='%h %s' 2>/dev/null || echo 'nothing in .live')"
 go run ./cmd/gentalent doctor --chat
+go run ./cmd/gentalent check-updates --live
 go run ./cmd/gentalent status --live
 '''
 

@@ -54,15 +54,23 @@ func (d Doctor) VerifyContract(ctx context.Context) error {
 }
 
 func (d Doctor) CheckSentReplies(ctx context.Context) (int, error) {
+	checked, issues, err := d.SentReplyIssues(ctx)
+	if err != nil {
+		return checked, err
+	}
+	return checked, contractError(issues)
+}
+
+func (d Doctor) SentReplyIssues(ctx context.Context) (int, []string, error) {
 	replies, err := d.Replies.RecentSent(ctx, 3)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	issues, err := d.replyIssues(ctx, replies)
 	if err != nil {
-		return len(replies), err
+		return len(replies), nil, err
 	}
-	return len(replies), contractError(issues)
+	return len(replies), issues, nil
 }
 
 func (d Doctor) replyIssues(ctx context.Context, replies []domain.Reply) ([]string, error) {

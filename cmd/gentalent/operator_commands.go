@@ -11,14 +11,27 @@ import (
 
 	mcommand "gentalent/internal/messaging/app/command"
 	mdomain "gentalent/internal/messaging/domain"
+	"gentalent/internal/messaging/infra/beeper"
 	mfiles "gentalent/internal/messaging/infra/files"
 	"gentalent/internal/shared/sqlitedb"
 )
 
 type statusJSON struct {
-	Nominations []nominationJSON      `json:"nominations"`
-	Counts      map[mdomain.State]int `json:"outbox_counts"`
-	Attention   []attentionJSON       `json:"outbox_needing_attention"`
+	Nominations    []nominationJSON      `json:"nominations"`
+	Counts         map[mdomain.State]int `json:"outbox_counts"`
+	Attention      []attentionJSON       `json:"outbox_needing_attention"`
+	PlatformUpdate *platformStatusJSON   `json:"platform_update,omitempty"`
+}
+
+type platformStatusJSON struct {
+	Platform                 string               `json:"platform"`
+	LastKnownVersion         string               `json:"last_known_version,omitempty"`
+	LastKnownSpecVersion     string               `json:"last_known_spec_version,omitempty"`
+	LastManagedVersion       string               `json:"last_managed_version,omitempty"`
+	LastExternalDriftVersion string               `json:"last_external_drift_version,omitempty"`
+	LastCheckedAt            string               `json:"last_checked_at,omitempty"`
+	RequiresCodeChanges      bool                 `json:"requires_code_changes,omitempty"`
+	BlockedVersions          []blockedVersionJSON `json:"blocked_versions,omitempty"`
 }
 
 type nominationJSON struct {
@@ -43,23 +56,27 @@ type feedbackJSON struct {
 	Text     string `json:"text"`
 }
 
-func readOnlyFlags(call invocation, name string, args []string) ([]groupConfig, bool, bool, error) {
+func readOnlyFlags(call invocation, name string, args []string) (config, []groupConfig, bool, bool, error) {
 	flags := newFlags(call, name)
 	live := flags.Bool("live", false, "use the real ballot")
 	groupFlag := flags.String("group", "", "only this configured group")
 	if _, err := parseFlags(flags, args); err != nil {
-		return nil, false, false, err
+		return config{}, nil, false, false, err
 	}
 	cfg, err := loadConfig(call.config)
 	if err != nil {
-		return nil, false, false, err
+		return config{}, nil, false, false, err
 	}
 	groups, multi, err := cfg.selectGroups(*groupFlag)
-	return groups, multi, *live, err
+	return cfg, groups, multi, *live, err
 }
 
 func status(ctx context.Context, call invocation, args []string) error {
-	groups, multi, live, err := readOnlyFlags(call, "status", args)
+	cfg, groups, multi, live, err := readOnlyFlags(call, "status", args)
+	if err != nil {
+		return err
+	}
+	platformStatus, err := readPlatformStatus(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -68,6 +85,7 @@ func status(ctx context.Context, call invocation, args []string) error {
 		if err != nil {
 			return err
 		}
+		report.PlatformUpdate = platformStatus
 		return printJSON(call.out, report)
 	}
 	reports := make(map[string]statusJSON, len(groups))
@@ -76,9 +94,47 @@ func status(ctx context.Context, call invocation, args []string) error {
 		if err != nil {
 			return prefixGroupError(g.Name, err)
 		}
+		report.PlatformUpdate = platformStatus
 		reports[g.Name] = report
 	}
 	return printJSON(call.out, reports)
+}
+
+func readPlatformStatus(ctx context.Context, cfg config) (*platformStatusJSON, error) {
+	store := mfiles.NewPlatformStateStore(cfg.platformStateDir())
+	state, err := store.Load(ctx, beeper.PlatformName)
+	if err != nil {
+		return nil, err
+	}
+	if state.LastKnownVersion == "" &&
+		state.LastKnownSpecVersion == "" &&
+		state.LastManagedVersion == "" &&
+		state.LastExternalDriftVersion == "" &&
+		len(state.BlockedVersions) == 0 &&
+		state.LastCheckedAt.IsZero() {
+		return nil, nil
+	}
+	out := &platformStatusJSON{
+		Platform:                 state.Platform,
+		LastKnownVersion:         state.LastKnownVersion,
+		LastKnownSpecVersion:     state.LastKnownSpecVersion,
+		LastManagedVersion:       state.LastManagedVersion,
+		LastExternalDriftVersion: state.LastExternalDriftVersion,
+		BlockedVersions:          toBlockedVersionsJSON(state.BlockedVersions),
+	}
+	if !state.LastCheckedAt.IsZero() {
+		out.LastCheckedAt = state.LastCheckedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if state.LastExternalDriftVersion != "" {
+		out.RequiresCodeChanges = true
+	}
+	for _, blocked := range state.BlockedVersions {
+		if blocked.AdapterRevision == beeper.AdapterRevision {
+			out.RequiresCodeChanges = true
+			break
+		}
+	}
+	return out, nil
 }
 
 func readGroupStatus(ctx context.Context, g groupConfig, live bool) (statusJSON, error) {
@@ -111,7 +167,7 @@ func readGroupStatus(ctx context.Context, g groupConfig, live bool) (statusJSON,
 }
 
 func feedback(ctx context.Context, call invocation, args []string) error {
-	groups, multi, live, err := readOnlyFlags(call, "feedback", args)
+	_, groups, multi, live, err := readOnlyFlags(call, "feedback", args)
 	if err != nil {
 		return err
 	}
@@ -154,7 +210,7 @@ func readGroupFeedback(ctx context.Context, g groupConfig, live bool) ([]feedbac
 }
 
 func busy(ctx context.Context, call invocation, args []string) error {
-	groups, multi, live, err := readOnlyFlags(call, "busy", args)
+	_, groups, multi, live, err := readOnlyFlags(call, "busy", args)
 	if err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	sdk "github.com/beeper/desktop-api-go/v6"
@@ -15,8 +16,10 @@ import (
 )
 
 type Client struct {
-	api   sdk.Client
-	group domain.Group
+	api             sdk.Client
+	group           domain.Group
+	mu              sync.RWMutex
+	observedVersion string
 }
 
 const requestTimeout = 15 * time.Second
@@ -35,15 +38,28 @@ func New(baseURL, token string, group domain.Group) (*Client, error) {
 	if strings.TrimSpace(token) == "" {
 		return nil, fmt.Errorf("token was empty")
 	}
+	client := &Client{group: group}
 	dialer := &net.Dialer{Timeout: requestTimeout}
-	api := sdk.NewClient(
+	client.api = sdk.NewClient(
 		option.WithBaseURL(u.String()),
 		option.WithAccessToken(token),
 		option.WithHTTPClient(httpClient(dialer, requestTimeout)),
 		option.WithMaxRetries(0),
-		option.WithMiddleware(platformHTTP(token)),
+		option.WithMiddleware(platformHTTP(token, client.recordObservedVersion)),
 	)
-	return &Client{api: api, group: group}, nil
+	return client, nil
+}
+
+func (c *Client) recordObservedVersion(version string) {
+	c.mu.Lock()
+	c.observedVersion = version
+	c.mu.Unlock()
+}
+
+func (c *Client) LastObservedVersion() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.observedVersion
 }
 
 func httpClient(dialer *net.Dialer, timeout time.Duration) *http.Client {
@@ -62,7 +78,7 @@ func (e responseError) Error() string {
 	return fmt.Sprintf("API returned HTTP %d; no automatic write retry was made", e.status)
 }
 
-func platformHTTP(token string) option.Middleware {
+func platformHTTP(token string, onVersion func(string)) option.Middleware {
 	return func(req *http.Request, next option.MiddlewareNext) (*http.Response, error) {
 		contentType := req.Header.Get("Content-Type")
 		req.Header = http.Header{}
@@ -75,6 +91,11 @@ func platformHTTP(token string) option.Middleware {
 		response, err := next(req)
 		if err != nil {
 			return nil, err
+		}
+		if onVersion != nil {
+			if version := strings.TrimSpace(response.Header.Get("X-Beeper-Desktop-Version")); version != "" {
+				onVersion(version)
+			}
 		}
 		if response.StatusCode < 200 || response.StatusCode >= 300 {
 			response.Body.Close()

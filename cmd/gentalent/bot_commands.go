@@ -15,8 +15,12 @@ import (
 	aicommand "gentalent/internal/ai/app/command"
 	"gentalent/internal/ai/infra/programs"
 	mcommand "gentalent/internal/messaging/app/command"
+	mdomain "gentalent/internal/messaging/domain"
+	"gentalent/internal/messaging/infra/beeper"
+	mfiles "gentalent/internal/messaging/infra/files"
 	"gentalent/internal/messaging/infra/preview"
 	"gentalent/internal/messaging/infra/worker"
+	"gentalent/internal/messaging/port"
 )
 
 type lockedWriter struct {
@@ -123,8 +127,13 @@ func runBot(ctx context.Context, call invocation, args []string) error {
 		previewOut = &lockedWriter{w: call.out}
 	}
 	baseLog := slog.New(slog.NewTextHandler(call.errs, nil))
+	monitorClient, err := beeperClient(cfg, mdomain.Group{})
+	if err != nil {
+		return err
+	}
 	engines := make([]*engine, 0, len(groups))
 	names := make([]string, 0, len(groups))
+	headerReaders := make([]port.HeaderVersionReader, 0, len(groups))
 	for _, g := range groups {
 		databases, err := openWorker(ctx, g, *live, time.Now)
 		if err != nil {
@@ -135,6 +144,7 @@ func runBot(ctx context.Context, call invocation, args []string) error {
 		if err != nil {
 			return prefixGroupError(g.Name, err)
 		}
+		headerReaders = append(headerReaders, client)
 		on := platform{reader: client, sender: client, delivery: client}
 		if !*live {
 			on = platform{reader: client, sender: preview.Sender{Output: previewOut}}
@@ -145,6 +155,26 @@ func runBot(ctx context.Context, call invocation, args []string) error {
 		}
 		engines = append(engines, newEngineWithSlots(g, databases, on, ai, photoSlots, whoSlots, groupLog))
 		names = append(names, g.Name)
+	}
+	var checkReplies func(context.Context) (int, []string, error)
+	if *live {
+		checkReplies = func(checkCtx context.Context) (int, []string, error) {
+			return collectLiveReplyIssues(checkCtx, cfg, monitorClient)
+		}
+	}
+	monitor := newPlatformMonitor(
+		mcommand.PlatformUpdateCoordinator{
+			Platform: beeper.NewUpdateObserver(monitorClient, beeperUpdaterCacheDir("")),
+			State:    mfiles.NewPlatformStateStore(cfg.platformStateDir()),
+			Now:      time.Now,
+		},
+		headerReaders,
+		checkReplies,
+		defaultPlatformCheckInterval,
+		baseLog,
+	)
+	for _, e := range engines {
+		e.monitor = monitor
 	}
 	mode := "LIVE replies enabled."
 	if !*live {

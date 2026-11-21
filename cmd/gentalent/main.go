@@ -29,6 +29,8 @@ var subcommands = []subcommand{
 	{"init", "Create a local config from the example; never overwrite.", initConfig},
 	{"set-secret", "Save a Beeper token through a hidden prompt.", setSecret},
 	{"doctor", "Check local API availability; group reads require --chat.", doctor},
+	{"check-updates", "Check platform version, API compatibility, and pending updates.", checkUpdates},
+	{"platform-update", "Assess, verify, or record rollback for a managed platform update.", platformUpdate},
 	{"accounts", "List connected Beeper accounts and connection status.", accounts},
 	{"list-groups", "List recent group chats (metadata only, no message bodies).", listGroups},
 	{"find-chat", "Search group metadata using your exact title words.", findChat},

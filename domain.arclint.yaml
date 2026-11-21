@@ -284,6 +284,47 @@ contexts:
     definition: >-
       The Group's conversation, whatever platform carries it: the messages,
       replies and reactions Members send and the messages GenTalent sends back.
+    services:
+      UpdatePolicy:
+        definition: >-
+          Decides how GenTalent responds to pending, managed, and external
+          updates of a messaging platform.
+        assertions:
+          no-unattended-platform-updates:
+            on: AssessUpdate
+            statement: >-
+              A pending platform update waits for explicit operator action
+              instead of automatic installation.
+            verified_by:
+              - internal/messaging/domain/update_policy_test.go:TestNoUnattendedPlatformUpdates
+          incompatible-managed-update-requires-rollback:
+            on: VerifyAppliedUpdate
+            statement: >-
+              A managed platform update that fails compatibility requires
+              rollback to the previous version.
+            verified_by:
+              - internal/messaging/domain/update_policy_test.go:TestIncompatibleManagedUpdateRequiresRollback
+          incompatible-update-requires-code-changes:
+            on: VerifyAppliedUpdate
+            statement: >-
+              A platform update that fails compatibility is marked as requiring
+              code changes.
+            verified_by:
+              - internal/messaging/domain/update_policy_test.go:TestIncompatibleUpdateRequiresCodeChanges
+          blocked-version-refused-for-managed-update:
+            on: AssessUpdate
+            statement: >-
+              A platform version marked as requiring code changes is refused for
+              managed updates.
+            verified_by:
+              - internal/messaging/domain/update_policy_test.go:TestBlockedVersionRefusedForManagedUpdate
+          external-incompatible-update-keeps-running:
+            on: AssessUpdate
+            statement: >-
+              An external platform update that fails compatibility leaves
+              GenTalent running while warning that code changes are required.
+            verified_by:
+              - internal/messaging/domain/update_policy_test.go:TestExternalIncompatibleUpdateKeepsRunning
   ai:
     definition: >-
       AI agents that do work for the Group, now finding a Person's photos and

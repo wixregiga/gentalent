@@ -444,6 +444,16 @@ func (c config) tokenFile() (string, error) {
 	return c.TokenFile, nil
 }
 
+func (c config) platformStateDir() string {
+	if dir := strings.TrimSpace(os.Getenv("GENTALENT_PLATFORM_STATE_DIR")); dir != "" {
+		return expandHome(dir)
+	}
+	if c.folder == "" {
+		return filepath.Join(".state", "platforms")
+	}
+	return filepath.Join(c.folder, ".state", "platforms")
+}
+
 func (c config) group() mdomain.Group {
 	return c.flatGroup().group()
 }

@@ -22,6 +22,9 @@ func (c *Client) CheckConnection(ctx context.Context) error {
 }
 
 type specDocument struct {
+	Info struct {
+		Version string `json:"version"`
+	} `json:"info"`
 	Components struct {
 		Schemas struct {
 			SendStatus struct {
@@ -42,9 +45,14 @@ type specDocument struct {
 }
 
 func (c *Client) ContractIssues(ctx context.Context) ([]string, error) {
+	_, issues, err := c.inspectSpec(ctx)
+	return issues, err
+}
+
+func (c *Client) inspectSpec(ctx context.Context) (string, []string, error) {
 	var spec specDocument
 	if err := c.api.Get(ctx, "v1/spec", nil, &spec); err != nil {
-		return nil, apiError(err)
+		return "", nil, apiError(err)
 	}
 	var issues []string
 	statuses := spec.Components.Schemas.SendStatus.Properties.Status.Enum
@@ -62,5 +70,5 @@ func (c *Client) ContractIssues(ctx context.Context) ([]string, error) {
 	if !strings.Contains(message.Description, "pendingMessageID") {
 		issues = append(issues, "GET message no longer documents lookup by pendingMessageID.")
 	}
-	return issues, nil
+	return strings.TrimSpace(spec.Info.Version), issues, nil
 }

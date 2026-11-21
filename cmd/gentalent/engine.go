@@ -28,6 +28,7 @@ type engine struct {
 	flusher   mcommand.Flusher
 	photos    photoSearches
 	who       whoSearches
+	monitor   *platformMonitor
 	pollEvery time.Duration
 	now       func() time.Time
 	log       *slog.Logger
@@ -147,8 +148,12 @@ func (e *engine) report(ctx context.Context, err error) {
 
 func (e *engine) cycle(ctx context.Context) error {
 	attached := errors.Join(e.attachKept(ctx), e.receiveKeptWho(ctx))
-	if err := e.poller.Poll(ctx); err != nil {
-		return errors.Join(attached, fmt.Errorf("poll: %w", err))
+	pollErr := e.poller.Poll(ctx)
+	if e.monitor != nil {
+		e.monitor.tick(ctx)
+	}
+	if pollErr != nil {
+		return errors.Join(attached, fmt.Errorf("poll: %w", pollErr))
 	}
 	inbox := e.applyInbox(ctx)
 	claimed := errors.Join(e.claimPhotoSearches(ctx), e.claimWhoSearches(ctx))
