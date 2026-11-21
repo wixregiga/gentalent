@@ -9,7 +9,7 @@ contexts:
       Generational Talent.
     aggregates:
       Group:
-        definition: The Members and their shared chat space.
+        definition: The Members and their shared chat space, whether a group chat or a two-person direct message.
         identity: GroupID
         entities:
           Nomination:
@@ -77,6 +77,7 @@ contexts:
             statement: A Group has at least two distinct Members.
             verified_by:
               - internal/nominations/domain/group_test.go:TestGroupHasAtLeastTwoMembers
+              - internal/messaging/infra/beeper/transport_test.go:TestVerifyChatAllowsTwoMemberSingleChatAndRefusesMismatchedTypes
         assertions:
           open-nominations-within-group-limit:
             on: Nominate
@@ -282,8 +283,9 @@ contexts:
           A Person who has been certified through the nomination process.
   messaging:
     definition: >-
-      The Group's conversation, whatever platform carries it: the messages,
-      replies and reactions Members send and the messages GenTalent sends back.
+      The Group's conversation, whether in a group chat or a two-person direct
+      chat on any platform: the messages, replies and reactions Members send and
+      the messages GenTalent sends back.
     services:
       UpdatePolicy:
         definition: >-
