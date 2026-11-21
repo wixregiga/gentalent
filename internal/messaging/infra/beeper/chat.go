@@ -14,7 +14,8 @@ func (c *Client) VerifyChat(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if chat.ID != group.ChatID || chat.AccountID != group.AccountID || chat.Type != sdk.ChatTypeGroup {
+	validType := chat.Type == sdk.ChatTypeGroup || (chat.Type == sdk.ChatTypeSingle && len(group.Members) == 2)
+	if chat.ID != group.ChatID || chat.AccountID != group.AccountID || !validType {
 		return fmt.Errorf("chat/account/type differs from the configured group; stopped")
 	}
 	if chat.Participants.HasMore || !chat.Participants.JSON.Items.Valid() || !chat.Participants.JSON.HasMore.Valid() {

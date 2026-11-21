@@ -243,3 +243,36 @@ func TestVerifyChatAllowsTwoOrMoreDistinctMembersAndRefusesInvalidRosters(t *tes
 		})
 	}
 }
+
+func TestVerifyChatAllowsTwoMemberSingleChatAndRefusesMismatchedTypes(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		chatType     string
+		members      []string
+		participants string
+		wantErr      string
+	}{
+		{"single chat two members with owner in participants", "single", []string{"alex", "blair"}, `[{"id":"alex"},{"id":"blair"}]`, ""},
+		{"single chat two members without owner in participants", "single", []string{"alex", "blair"}, `[{"id":"blair"}]`, ""},
+		{"single chat three configured members refused", "single", []string{"alex", "blair", "casey"}, `[{"id":"alex"},{"id":"blair"},{"id":"casey"}]`, "chat/account/type differs"},
+		{"single chat mismatched participant refused", "single", []string{"alex", "blair"}, `[{"id":"alex"},{"id":"casey"}]`, "confirmed group roster"},
+		{"channel type refused", "channel", []string{"alex", "blair"}, `[{"id":"alex"},{"id":"blair"}]`, "chat/account/type differs"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testClientForGroup(t, domain.Group{ChatID: "group/one", AccountID: "demo-account", Owner: "alex", Members: tc.members}, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprintf(w, `{"id":"group/one","accountID":"demo-account","type":%q,"participants":{"hasMore":false,"items":%s}}`, tc.chatType, tc.participants)
+			})
+			err := client.VerifyChat(t.Context())
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("want valid chat, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("want error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
