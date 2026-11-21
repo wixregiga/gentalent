@@ -65,6 +65,8 @@ download_url="${BEEPER_DOWNLOAD_URL:-https://api.beeper.com/desktop/download/lin
 api_url="${BEEPER_API_URL:-http://127.0.0.1:23373}"
 stop_timeout="${BEEPER_STOP_TIMEOUT:-20}"
 ready_timeout="${BEEPER_READY_TIMEOUT:-120}"
+chat_ready_timeout="${BEEPER_CHAT_READY_TIMEOUT:-30}"
+verify_warmup_timeout="${BEEPER_VERIFY_WARMUP_TIMEOUT:-20}"
 export BEEPER_UPDATER_CACHE_DIR="$cache_dir"
 
 scratch="$(mktemp -d)"
@@ -147,13 +149,26 @@ restart_beeper() {
   done
   timeout 120 mise daemons start beeper >/dev/null 2>&1 || true
   local waited=0
+  local api_up=0
   while (( waited < ready_timeout )); do
     if "$curl_bin" -sf "${api_url}/v1/info" >/dev/null 2>&1 && \
        "$curl_bin" -sf "${api_url}/v1/spec" >/dev/null 2>&1; then
-      return 0
+      api_up=1
+      break
     fi
     sleep 1
     waited=$((waited + 1))
+  done
+  if (( api_up == 0 )); then
+    return 1
+  fi
+  local chat_waited=0
+  while (( chat_waited < chat_ready_timeout )); do
+    if "$bot_bin" --config "$config" doctor --chat >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+    chat_waited=$((chat_waited + 1))
   done
   return 1
 }
@@ -286,21 +301,36 @@ verify_reason=""
 verify_json=""
 if [[ "$api_ready" -eq 0 ]]; then
   verify_ok=0
-  verify_reason="Beeper API did not become ready on $api_url within ${ready_timeout}s after update"
+  verify_reason="Beeper API and chat readiness did not become ready on $api_url after update"
 else
-  verify_rc=0
-  verify_json="$("$bot_bin" --config "$config" platform-update verify --platform beeper --previous "$previous_version" --target "$candidate_version" --live --json --cache-dir "$cache_dir" 2>"$scratch/verify.err")" || verify_rc=$?
-  if [[ "$verify_rc" -ne 0 ]]; then
-    verify_ok=0
-    if [[ -n "$verify_json" ]] && printf '%s' "$verify_json" | "$jq" -e '.incompatible_reasons' >/dev/null 2>&1; then
-      verify_reason="$(printf '%s' "$verify_json" | "$jq" -r '.incompatible_reasons | join("; ")')"
-    else
-      verify_reason="$(cat "$scratch/verify.err")"
+  verify_deadline=$(( $(date +%s) + verify_warmup_timeout ))
+  while :; do
+    verify_ok=1
+    verify_reason=""
+    verify_json=""
+    verify_rc=0
+    verify_json="$("$bot_bin" --config "$config" platform-update verify --platform beeper --previous "$previous_version" --target "$candidate_version" --live --json --cache-dir "$cache_dir" 2>"$scratch/verify.err")" || verify_rc=$?
+    if [[ "$verify_rc" -ne 0 ]]; then
+      verify_ok=0
+      if [[ -n "$verify_json" ]] && printf '%s' "$verify_json" | "$jq" -e '.incompatible_reasons' >/dev/null 2>&1; then
+        verify_reason="$(printf '%s' "$verify_json" | "$jq" -r '.incompatible_reasons | join("; ")')"
+      else
+        verify_reason="$(cat "$scratch/verify.err")"
+      fi
+    elif ! "$bot_bin" --config "$config" doctor --contract >"$scratch/doctor.out" 2>"$scratch/doctor.err"; then
+      verify_ok=0
+      verify_reason="$(cat "$scratch/doctor.err")"
     fi
-  elif ! "$bot_bin" --config "$config" doctor --contract >"$scratch/doctor.out" 2>"$scratch/doctor.err"; then
-    verify_ok=0
-    verify_reason="$(cat "$scratch/doctor.err")"
-  fi
+
+    if [[ "$verify_ok" -eq 1 ]]; then
+      break
+    fi
+    if [[ "$verify_reason" == *"API returned HTTP 5"* || "$verify_reason" == *"API connection"* ]] && (( $(date +%s) < verify_deadline )); then
+      sleep 2
+      continue
+    fi
+    break
+  done
 fi
 
 if [[ "$verify_ok" -ne 1 ]]; then

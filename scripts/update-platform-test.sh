@@ -38,13 +38,26 @@ import json
 import os
 import pathlib
 import sys
+import threading
 
 state_file = pathlib.Path(sys.argv[1])
 port_file = pathlib.Path(sys.argv[2])
 opt_dir = pathlib.Path(sys.argv[3])
+warmup_lock = threading.Lock()
 
 def load_state():
     return json.loads(state_file.read_text())
+
+def consume_warmup(key):
+    with warmup_lock:
+        wf = state_file.parent / f"warmup_{key}.count"
+        if not wf.exists():
+            return False
+        rem = int(wf.read_text().strip() or "0")
+        if rem <= 0:
+            return False
+        wf.write_text(str(rem - 1))
+        return True
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -78,12 +91,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         break
                 ver = trimmed
 
+        path_only = self.path.split("?", 1)[0]
+        if path_only == "/v1/chats/group%2Fone" and consume_warmup("chat"):
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(b'{"error":"chat store warming up"}')
+            return
+        if path_only == "/v1/chats/group%2Fone/messages/739" and consume_warmup("message"):
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(b'{"error":"message store warming up"}')
+            return
+
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("X-Beeper-Desktop-Version", ver)
         self.end_headers()
 
-        path_only = self.path.split("?", 1)[0]
         if path_only == "/v1/info":
             body = {
                 "app": {"bundle_id": "com.automattic.beeper.desktop", "name": "Beeper", "version": ver},
@@ -180,6 +204,11 @@ case "\$1 \$2 \$3" in
     "$jq_bin/jq" '.api_down = true' "$work/server_state.json" >"\$tmp" && mv "\$tmp" "$work/server_state.json"
     ;;
   "daemons start beeper")
+    if [ -f "$work/arm_warmup" ]; then
+      rm -f "$work/arm_warmup"
+      echo 1 >"$work/warmup_chat.count"
+      echo 1 >"$work/warmup_message.count"
+    fi
     tmp="$work/server_state.json.tmp"
     "$jq_bin/jq" '.api_down = false' "$work/server_state.json" >"\$tmp" && mv "\$tmp" "$work/server_state.json"
     ;;
@@ -196,6 +225,8 @@ export BEEPER_UPDATER_CACHE_DIR="$work/cache"
 export BEEPER_DOWNLOAD_URL="$api_url/download/Beeper-4.3.230-x86_64.AppImage"
 export BEEPER_API_URL="$api_url"
 export BEEPER_READY_TIMEOUT="5"
+export BEEPER_CHAT_READY_TIMEOUT="5"
+export BEEPER_VERIFY_WARMUP_TIMEOUT="5"
 export BEEPER_STOP_TIMEOUT="5"
 export BEEPER_SKIP_PGREP="1"
 export GENTALENT_PLATFORM_STATE_DIR="$work/state/platforms"
@@ -259,18 +290,21 @@ cat >"$work/server_state.json" <<'JSON'
 }
 JSON
 rm -f "$work/mise.log"
+touch "$work/arm_warmup"
 if ! output="$("$work/repo/scripts/update-platform.sh" beeper 2>&1)"; then
   fail "compatible update from cache failed: $output"
 elif [[ "$(readlink "$work/opt/current.AppImage")" != "Beeper-4.3.210-x86_64.AppImage" || "$(readlink "$work/opt/previous.AppImage")" != "Beeper-4.3.200-x86_64.AppImage" ]]; then
   fail "symlinks not updated: current=$(readlink "$work/opt/current.AppImage") prev=$(readlink "$work/opt/previous.AppImage")"
 elif [[ -e "$work/cache/update-info.json" || -e "$work/cache/Beeper-4.3.210-x86_64.AppImage" ]]; then
   fail "consumed updater cache was not removed"
+elif [[ "$(cat "$work/warmup_chat.count" 2>/dev/null || echo 1)" != "0" || "$(cat "$work/warmup_message.count" 2>/dev/null || echo 1)" != "0" ]]; then
+  fail "warmup 500 counts were not exercised"
 elif grep -q "gentalent" "$work/mise.log" || ! grep -q "daemons stop beeper" "$work/mise.log" || ! grep -q "daemons start beeper" "$work/mise.log"; then
   fail "restart did not target only beeper: $(cat "$work/mise.log")"
 elif [[ "$output" != *"Review note:"* ]]; then
   fail "minor spec bump missing review note: $output"
 else
-  echo "ok   compatible cached update swaps symlinks, restarts only beeper, cleans cache, notes minor spec bump"
+  echo "ok   compatible cached update waits out startup warmup 500s, swaps symlinks, restarts only beeper, cleans cache, notes minor spec bump"
 fi
 
 cat >"$work/server_state.json" <<'JSON'
