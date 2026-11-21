@@ -174,6 +174,16 @@ PY
 cat >"$work/stubs/mise" <<STUB
 #!/bin/sh
 echo "\$*" >>"$work/mise.log"
+case "\$1 \$2 \$3" in
+  "daemons stop beeper")
+    tmp="$work/server_state.json.tmp"
+    "$jq_bin/jq" '.api_down = true' "$work/server_state.json" >"\$tmp" && mv "\$tmp" "$work/server_state.json"
+    ;;
+  "daemons start beeper")
+    tmp="$work/server_state.json.tmp"
+    "$jq_bin/jq" '.api_down = false' "$work/server_state.json" >"\$tmp" && mv "\$tmp" "$work/server_state.json"
+    ;;
+esac
 exit 0
 STUB
 chmod +x "$work/stubs/mise"
@@ -186,6 +196,8 @@ export BEEPER_UPDATER_CACHE_DIR="$work/cache"
 export BEEPER_DOWNLOAD_URL="$api_url/download/Beeper-4.3.230-x86_64.AppImage"
 export BEEPER_API_URL="$api_url"
 export BEEPER_READY_TIMEOUT="5"
+export BEEPER_STOP_TIMEOUT="5"
+export BEEPER_SKIP_PGREP="1"
 export GENTALENT_PLATFORM_STATE_DIR="$work/state/platforms"
 
 make_appimage() {

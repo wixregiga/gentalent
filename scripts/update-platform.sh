@@ -63,6 +63,7 @@ opt_dir="${BEEPER_OPT_DIR:-$HOME/.local/opt/beeper}"
 cache_dir="${BEEPER_UPDATER_CACHE_DIR:-$HOME/.cache/beepertexts-updater/pending}"
 download_url="${BEEPER_DOWNLOAD_URL:-https://api.beeper.com/desktop/download/linux/x64/stable/com.automattic.beeper.desktop}"
 api_url="${BEEPER_API_URL:-http://127.0.0.1:23373}"
+stop_timeout="${BEEPER_STOP_TIMEOUT:-20}"
 ready_timeout="${BEEPER_READY_TIMEOUT:-120}"
 export BEEPER_UPDATER_CACHE_DIR="$cache_dir"
 
@@ -124,12 +125,31 @@ swap_symlink() {
   mv -Tf "$tmp" "$link"
 }
 
+is_beeper_down() {
+  if "$curl_bin" -sf "${api_url}/v1/info" >/dev/null 2>&1; then
+    return 1
+  fi
+  if [[ -z "${BEEPER_SKIP_PGREP:-}" ]] && pgrep -x "${BEEPER_PROCESS_NAME:-beepertexts}" >/dev/null 2>&1; then
+    return 1
+  fi
+  return 0
+}
+
 restart_beeper() {
   timeout 60 mise daemons stop beeper >/dev/null 2>&1 || true
+  local stop_waited=0
+  while (( stop_waited < stop_timeout )); do
+    if is_beeper_down; then
+      break
+    fi
+    sleep 1
+    stop_waited=$((stop_waited + 1))
+  done
   timeout 120 mise daemons start beeper >/dev/null 2>&1 || true
   local waited=0
   while (( waited < ready_timeout )); do
-    if "$curl_bin" -sf "${api_url}/v1/info" >/dev/null 2>&1; then
+    if "$curl_bin" -sf "${api_url}/v1/info" >/dev/null 2>&1 && \
+       "$curl_bin" -sf "${api_url}/v1/spec" >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
